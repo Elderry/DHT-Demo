@@ -1,0 +1,13 @@
+Each query is a list whose first element is query type
+
+0:	return node nickname
+1:	return node ID
+2:	shut down
+3:	sleep
+	[time(in seconds)]
+4:	wake up
+5:	ask for joining
+	[ID] [nickname]
+6:	palpitate
+7:	acknowledge to join
+	
