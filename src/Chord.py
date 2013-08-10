@@ -22,7 +22,7 @@ class Node:
     nickname = 'default'
 
     # Number of successors or predecessors
-    segementSize=2
+    segementSize = 2
 
     successors = [0, 0]
     predecessors = [0, 0]
@@ -57,7 +57,7 @@ class Listen(protocol.Protocol):
         queryType = data[0]
         print('Received a query, type is ' + str(data[0]))
         
-        react(data)
+        react(self.transport, data)
         
 class ListenFactory(protocol.ServerFactory):
     
@@ -69,14 +69,20 @@ class Control(Thread):
     def run(self):
         while True:
             raw = raw_input('Please input your command:\n')
+            command=raw.split(' ')
             
-            if raw[0] == 'show':
-                if raw[1] == 'nickname':
+            if command[0] == 'show':
+                if command[1] == 'nickname':
                     print(Node.nickname)
+                if command[1]=='neighbors':
+                    print('Predecessors: ')
+                    print(str(Node.predecessors))
+                    print('Successors: ')
+                    print(str(Node.successors))
 
 def react(transport, query):
     
-    queryType=query[0]
+    queryType = query[0]
     
     # Someone wants to join
     if queryType == 5:
@@ -97,32 +103,38 @@ def react(transport, query):
         print(Node.nickname + '\'s ID: ' + str(Node.ID) + '.')
         
         # Ask for predessor(s) and successor(s).
-        query=[8, Node.ID, Node.IP, Node.port]
+        query = [8, Node.ID, Node.IP, Node.port]
         transport.write(dumps(query))
         
     # Ask for predessor(s) and successor(s).
-    elif queryType==8:
-        print('Node with ID: '+str(query[1])+' arrived.')
+    elif queryType == 8:
+        print('Node with ID: ' + str(query[1]) + ' arrived.')
         print('Going to update segement.')
         updateNeighbors(query[1], query[2], query[3])
     
     # Ask for flushing predessor(s) and successor(s).
-    elif queryType==81:
+    elif queryType == 81:
         print('Ready to flush segement.')
-        Node.predecessors=query[1]
-        Node.successors=query[2]
+        Node.predecessors = query[1]
+        Node.successors = query[2]
         
 def updateNeighbors(askerID, askerIP, askerPort):
     
+    # If already updated, return
+    if askerID in Node.predecessors or askerID in Node.successors or askerID == Node.ID:
+        return
+    
     # If true, means nodes number is less than segementSize*2+1.
-    fewNodes=False
-    for i in range(Node.segementSize-1, 0, -1):
-        if Node.predecessors[i]==Node.successors[i]:
-            fewNodes=True
+    fewNodes = False
+    for i in range(Node.segementSize - 1, 0, -1):
+        if Node.predecessors[i] == Node.successors[i]:
+            fewNodes = True
             break
         
     if fewNodes:
-        nodes=[]
+        
+        # Collect every node.
+        nodes = []
         for i in Node.predecessors:
             if not Node.predecessors[i] in nodes:
                 nodes.append(Node.predecessors[i])
@@ -133,132 +145,148 @@ def updateNeighbors(askerID, askerIP, askerPort):
             nodes.append(Node.ID)
         nodes.append(askerID)
         nodes.sort()
-        indexOfThisNode=nodes.index(Node.ID)
-        iterator=indexOfThisNode
-        for i in range(0, Node.segementSize):
-            iterator+=1
-            if iterator>Node.segementSize:
-                iterator=0
-            Node.successors[i]=nodes[iterator]
-        iterator=indexOfThisNode
-        for i in range(0, Node.segementSize):
-            iterator-=1
-            if iterator<0:
-                iterator=Node.segementSize-1
-            Node.predecessors[i]=nodes[iterator]
+        
+        segement=fewNodesSegement(nodes, Node.ID)
+        Node.predecessors=segement[0]
+        Node.successors=segement[1]
+        
+        segement=fewNodesSegement(nodes, askerID)
+        predecessors=segement[0]
+        successors=segement[1]
+        
     else:
-        found=False
+        found = False
         # Check if the novice is among predecessors.
-        for i in range(Node.segementSize-1):
+        for i in range(Node.segementSize - 1):
 
             # Find your place!
-            if AIsBetweenBAndC(askerID, Node.predecessors[i+1], Node.predecessors[i]):
-                found=True
+            if AIsBetweenBAndC(askerID, Node.predecessors[i + 1], Node.predecessors[i]):
+                found = True
                 
                 # Inform neighbor(s) to update their own.
-                query=[8, askerID, askerIP, askerPort]
-                for indexUpdateQuery in range(Node.segementSize-1):
-                    rightIndex=i-indexUpdateQuery
-                    leftIndex=i+1+indexUpdateQuery
+                query = [8, askerID, askerIP, askerPort]
+                for indexUpdateQuery in range(Node.segementSize - 1):
+                    rightIndex = i - indexUpdateQuery
+                    leftIndex = i + 1 + indexUpdateQuery
                     
                     # The right side.
-                    if rightIndex>0:
-                        target=Node.predecessors[rightIndex]
+                    if rightIndex > 0:
+                        target = Node.predecessors[rightIndex]
                     # Need to send update query to successor(s).
                     else:
-                        rightIndex=-rightIndex-1
-                        target=Node.successors[rightIndex]
+                        rightIndex = -rightIndex - 1
+                        target = Node.successors[rightIndex]
                     reactor.connectTCP(target[1], target[2], SendFactory(query))
                     # The left side.
-                    if leftIndex<Node.segementSize:
-                        target=Node.predecessors[leftIndex]
+                    if leftIndex < Node.segementSize:
+                        target = Node.predecessors[leftIndex]
                         reactor.connectTCP(target[1], target[2], SendFactory(query))
 
                 # Update myself
-                for indexNeedUpdate in range(Node.segementSize-1, i+1, -1):
-                    Node.predecessors[indexNeedUpdate]=Node.predecessors[indexNeedUpdate-1]
-                Node.predecessors[i+1]=[askerID, askerIP, askerPort]
+                for indexNeedUpdate in range(Node.segementSize - 1, i + 1, -1):
+                    Node.predecessors[indexNeedUpdate] = Node.predecessors[indexNeedUpdate - 1]
+                Node.predecessors[i + 1] = [askerID, askerIP, askerPort]
                     
         # If the novice is near this node.
         if AIsBetweenBAndC(Node.predecessors[0], Node.successors[0]):
-            found=True
-            onLeft=AIsBetweenBAndC(askerID, Node.predecessors[0], Node.ID)
+            found = True
+            onLeft = AIsBetweenBAndC(askerID, Node.predecessors[0], Node.ID)
 
-            for indexNeedUpdate in range(Node.segementSize-1):
-                query=[8, askerID, askerIP, askerPort]
-                target=Node.successors[indexNeedUpdate]
+            for indexNeedUpdate in range(Node.segementSize - 1):
+                query = [8, askerID, askerIP, askerPort]
+                target = Node.successors[indexNeedUpdate]
                 reactor.connectTCP(target[1], target[2], SendFactory(query))
-                target=Node.predecessors[indexNeedUpdate]
+                target = Node.predecessors[indexNeedUpdate]
                 reactor.connectTCP(target[1], target[2], SendFactory(query))
-            indexNeedUpdate=Node.segementSize-1
+            indexNeedUpdate = Node.segementSize - 1
             if onLeft:
-                target=Node.successors[indexNeedUpdate]
+                target = Node.successors[indexNeedUpdate]
             else:
-                target=Node.predecessors[indexNeedUpdate]
+                target = Node.predecessors[indexNeedUpdate]
             reactor.connectTCP(target[1], target[2], SendFactory(query))
             
             if onLeft:
-                predecessors=list(Node.predecessors)
-                predecessors[0]=[Node.ID, Node.IP, Node.port]
+                predecessors = list(Node.predecessors)
+                predecessors[0] = [Node.ID, Node.IP, Node.port]
             else:
-                successors=list(Node.successors)
-                successors[0]=[Node.ID, Node.IP, Node.port]
-            flushQuery=[81, predecessors, successors]
+                successors = list(Node.successors)
+                successors[0] = [Node.ID, Node.IP, Node.port]
+            flushQuery = [81, predecessors, successors]
             reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
 
             # Update myself    
-            for indexNeedUpdate in range(Node.segementSize-1, 0, -1):
+            for indexNeedUpdate in range(Node.segementSize - 1, 0, -1):
                 if onLeft:
-                    Node.predecessors[indexNeedUpdate]=Node.predecessors[indexNeedUpdate-1]
-                    Node.predecessors[0]=[askerID, askerIP, askerPort]
+                    Node.predecessors[indexNeedUpdate] = Node.predecessors[indexNeedUpdate - 1]
+                    Node.predecessors[0] = [askerID, askerIP, askerPort]
                 else:
-                    Node.successors[indexNeedUpdate]=Node.successors[indexNeedUpdate-1]
-                    Node.successors[0]=[askerID, askerIP, askerPort]
+                    Node.successors[indexNeedUpdate] = Node.successors[indexNeedUpdate - 1]
+                    Node.successors[0] = [askerID, askerIP, askerPort]
                 
         # Check if the novice is among successors.
-        for i in range(Node.segementSize-1):
+        for i in range(Node.segementSize - 1):
 
             # Find your place!
-            if AIsBetweenBAndC(askerID, Node.successors[i], Node.successors[i+1]):
-                found=True
+            if AIsBetweenBAndC(askerID, Node.successors[i], Node.successors[i + 1]):
+                found = True
                 
                 # Inform neighbor(s) to update their own.
-                query=[8, askerID, askerIP, askerPort]
-                for indexUpdateQuery in range(Node.segementSize-1):
-                    leftIndex=i-indexUpdateQuery
-                    rightIndex=i+1+indexUpdateQuery
+                query = [8, askerID, askerIP, askerPort]
+                for indexUpdateQuery in range(Node.segementSize - 1):
+                    leftIndex = i - indexUpdateQuery
+                    rightIndex = i + 1 + indexUpdateQuery
                     
                     # The right side.
-                    if leftIndex>0:
-                        target=Node.successors[leftIndex]
+                    if leftIndex > 0:
+                        target = Node.successors[leftIndex]
                     # Need to send update query to successor(s).
                     else:
-                        leftIndex=-leftIndex-1
-                        target=Node.predecessors[leftIndex]
+                        leftIndex = -leftIndex - 1
+                        target = Node.predecessors[leftIndex]
                     reactor.connectTCP(target[1], target[2], SendFactory(query))
                     # The left side.
-                    if rightIndex<Node.segementSize:
-                        target=Node.successors[rightIndex]
+                    if rightIndex < Node.segementSize:
+                        target = Node.successors[rightIndex]
                         reactor.connectTCP(target[1], target[2], SendFactory(query))
                     
                 # Update myself
-                for indexNeedUpdate in range(Node.segementSize-1, i+1, -1):
-                    Node.successors[indexNeedUpdate]=Node.successors[indexNeedUpdate-1]
-                Node.successors[i+1]=[askerID, askerIP, askerPort]
-                
+                for indexNeedUpdate in range(Node.segementSize - 1, i + 1, -1):
+                    Node.successors[indexNeedUpdate] = Node.successors[indexNeedUpdate - 1]
+                Node.successors[i + 1] = [askerID, askerIP, askerPort]
+        
+        # If this node does not need to update itself.
         if not found:
-            target=Node.predecessors[-1]
+            target = Node.predecessors[-1]
             reactor.connectTCP(target[1], target[2], SendFactory(query))
-            target=Node.successors[-1]
+            target = Node.successors[-1]
             reactor.connectTCP(target[1], target[2], SendFactory(query))
         
 def AIsBetweenBAndC(a, b, c):
-    if c<b:
-        c+=Node.scale
-    if a<c and a>b:
+    if c < b:
+        c += Node.scale
+    if a < c and a > b:
         return True
     else:
         return c
+    
+# When there are few nodes, calculate the segement of center.
+def fewNodesSegement(nodes, center):
+    indexOfThisNode = nodes.index(center)
+    iterator = indexOfThisNode
+    predecessors=[]
+    successors=[]
+    for i in range(Node.segementSize):
+        iterator += 1
+        if iterator >= Node.segementSize:
+            iterator = 0
+        successors.append(nodes[iterator])
+    iterator = indexOfThisNode
+    for i in range(Node.segementSize):
+        iterator -= 1
+        if iterator < 0:
+            iterator = Node.segementSize - 1
+        predecessors.append(nodes[iterator])
+    return [predecessors, successors]
         
 def main():
 
