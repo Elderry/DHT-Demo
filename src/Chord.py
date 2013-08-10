@@ -24,8 +24,8 @@ class Node:
     # Number of successors or predecessors
     segementSize = 2
 
-    successors = [0, 0]
-    predecessors = [0, 0]
+    successors = [[0, 'localhost', 8000], [0, 'localhost', 8000]]
+    predecessors = [[0, 'localhost', 8000], [0, 'localhost', 8000]]
 
 class Send(protocol.Protocol):
     
@@ -69,12 +69,12 @@ class Control(Thread):
     def run(self):
         while True:
             raw = raw_input('Please input your command:\n')
-            command=raw.split(' ')
+            command = raw.split(' ')
             
             if command[0] == 'show':
                 if command[1] == 'nickname':
                     print(Node.nickname)
-                if command[1]=='neighbors':
+                if command[1] == 'neighbors':
                     print('Predecessors: ')
                     print(str(Node.predecessors))
                     print('Successors: ')
@@ -135,24 +135,44 @@ def updateNeighbors(askerID, askerIP, askerPort):
         
         # Collect every node.
         nodes = []
-        for i in Node.predecessors:
-            if not Node.predecessors[i] in nodes:
-                nodes.append(Node.predecessors[i])
-        for i in Node.successors:
-            if not Node.successors[i] in nodes:
-                nodes.append(Node.successors[i])
+        for predecessor in Node.predecessors:
+            if not predecessor[0] in nodes:
+                nodes.append(predecessor[0])
+        for successor in Node.successors:
+            if not successor[0] in nodes:
+                nodes.append(successor[0])
+                
+        # Inform everyone the novice
+        for i in nodes:
+            if not i == Node.ID:
+                query = [8, askerID, askerIP, askerPort]
+                target=[]
+                for node in Node.predecessors:
+                    if node[0]==i:
+                        target=node
+                        break
+                for node in Node.predecessors:
+                    if node[0]==i:
+                        target=node
+                        break
+                reactor.connectTCP(target[1], target[0], sendFactory(query))
+            
         if not Node.ID in nodes:
             nodes.append(Node.ID)
         nodes.append(askerID)
         nodes.sort()
         
-        segement=fewNodesSegement(nodes, Node.ID)
-        Node.predecessors=segement[0]
-        Node.successors=segement[1]
+        # Update itself
+        segement = fewNodesSegement(nodes, Node.ID)
+        Node.predecessors = list(segement[0])
+        Node.successors = list(segement[1])
         
-        segement=fewNodesSegement(nodes, askerID)
-        predecessors=segement[0]
-        successors=segement[1]
+        # Flush asker
+        segement = fewNodesSegement(nodes, askerID)
+        predecessors = segement[0]
+        successors = segement[1]
+        query = [81, predecessors, successors]
+        reactor.connectTCP(askerIP, askerPort, SendFactory(query))
         
     else:
         found = False
@@ -273,8 +293,8 @@ def AIsBetweenBAndC(a, b, c):
 def fewNodesSegement(nodes, center):
     indexOfThisNode = nodes.index(center)
     iterator = indexOfThisNode
-    predecessors=[]
-    successors=[]
+    predecessors = []
+    successors = []
     for i in range(Node.segementSize):
         iterator += 1
         if iterator >= Node.segementSize:
