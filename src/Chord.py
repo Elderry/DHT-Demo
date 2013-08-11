@@ -124,53 +124,53 @@ def updateNeighbors(askerID, askerIP, askerPort):
     if askerID in Node.predecessors or askerID in Node.successors or askerID == Node.ID:
         return
     
-    # If true, means nodes number is less than segementSize*2+1.
+    # If true, means nodeIDs number is less than segementSize*2+1.
     fewNodes = False
     for i in range(Node.segementSize - 1, 0, -1):
-        if Node.predecessors[i] == Node.successors[i]:
+        if Node.predecessors[i][0] == Node.successors[i][0]:
             fewNodes = True
             break
         
     if fewNodes:
         
-        # Collect every node.
-        nodes = []
+        # Collect every node's ID.
+        nodeIDs = []
         for predecessor in Node.predecessors:
-            if not predecessor[0] in nodes:
-                nodes.append(predecessor[0])
+            if not predecessor[0] in nodeIDs:
+                nodeIDs.append(predecessor[0])
         for successor in Node.successors:
-            if not successor[0] in nodes:
-                nodes.append(successor[0])
+            if not successor[0] in nodeIDs:
+                nodeIDs.append(successor[0])
                 
         # Inform everyone the novice
-        for i in nodes:
+        for i in nodeIDs:
             if not i == Node.ID:
                 query = [8, askerID, askerIP, askerPort]
-                target=[]
+                target = []
                 for node in Node.predecessors:
-                    if node[0]==i:
-                        target=node
+                    if node[0] == i:
+                        target = node
                         break
                 for node in Node.predecessors:
-                    if node[0]==i:
-                        target=node
+                    if node[0] == i:
+                        target = node
                         break
-                reactor.connectTCP(target[1], target[0], sendFactory(query))
+                reactor.connectTCP(target[1], target[0], SendFactory(query))
             
-        if not Node.ID in nodes:
-            nodes.append(Node.ID)
-        nodes.append(askerID)
-        nodes.sort()
+        if not Node.ID in nodeIDs:
+            nodeIDs.append(Node.ID)
+        nodeIDs.append(askerID)
+        nodeIDs.sort()
         
         # Update itself
-        segement = fewNodesSegement(nodes, Node.ID)
-        Node.predecessors = list(segement[0])
-        Node.successors = list(segement[1])
+        neighborsIDs = fewNodesNeighbors(nodeIDs, Node.ID)
+        Node.predecessors = completeAddressesByIDs(neighborsIDs[0], askerID, askerIP, askerPort)
+        Node.successors = completeAddressesByIDs(neighborsIDs[1], askerID, askerIP, askerPort)
         
         # Flush asker
-        segement = fewNodesSegement(nodes, askerID)
-        predecessors = segement[0]
-        successors = segement[1]
+        neighborsIDs = fewNodesNeighbors(nodeIDs, askerID)
+        predecessors = completeAddressesByIDs(neighborsIDs[0], askerID, askerIP, askerPort)
+        successors = completeAddressesByIDs(neighborsIDs[1], askerID, askerIP, askerPort)
         query = [81, predecessors, successors]
         reactor.connectTCP(askerIP, askerPort, SendFactory(query))
         
@@ -290,7 +290,7 @@ def AIsBetweenBAndC(a, b, c):
         return c
     
 # When there are few nodes, calculate the segement of center.
-def fewNodesSegement(nodes, center):
+def fewNodesNeighbors(nodes, center):
     indexOfThisNode = nodes.index(center)
     iterator = indexOfThisNode
     predecessors = []
@@ -307,6 +307,25 @@ def fewNodesSegement(nodes, center):
             iterator = Node.segementSize - 1
         predecessors.append(nodes[iterator])
     return [predecessors, successors]
+        
+def getAddressByID(ID):
+    for node in Node.predecessors:
+        if node[0] == ID:
+            return [node[1], node[2]]
+    for node in Node.successors:
+        if node[0] == ID:
+            return [node[1], node[2]]
+
+def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
+    result = []
+    for ID in IDs:
+        address = getAddressByID(ID)
+        # ID is asker's ID
+        if address==None:
+            result.append([askerID, askerIP, askerPort])
+        else:
+            result.append([ID, address[0], address[1]])
+    return result
         
 def main():
 
