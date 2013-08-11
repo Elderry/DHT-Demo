@@ -22,7 +22,7 @@ class Node:
     nickname = 'default'
 
     # Number of successors or predecessors
-    segementSize = 2
+    neighborNum = 2
 
     successors = [[0, 'localhost', 8000], [0, 'localhost', 8000]]
     predecessors = [[0, 'localhost', 8000], [0, 'localhost', 8000]]
@@ -74,11 +74,15 @@ class Control(Thread):
             if command[0] == 'show':
                 if command[1] == 'nickname':
                     print(Node.nickname)
-                if command[1] == 'neighbors':
+                elif command[1] == 'neighbors':
                     print('Predecessors: ')
                     print(str(Node.predecessors))
                     print('Successors: ')
                     print(str(Node.successors))
+                elif command[1]=='ID':
+                    print(Node.ID)
+                elif command[1]=='address':
+                    print(str([Node.IP, Node.port]))
 
 def react(transport, query):
     
@@ -109,53 +113,35 @@ def react(transport, query):
     # Ask for predessor(s) and successor(s).
     elif queryType == 8:
         print('Node with ID: ' + str(query[1]) + ' arrived.')
-        print('Going to update segement.')
+        print('Going to update neighbor(s).')
         updateNeighbors(query[1], query[2], query[3])
     
     # Ask for flushing predessor(s) and successor(s).
     elif queryType == 81:
-        print('Ready to flush segement.')
+        print('Ready to flush neighbor(s).')
         Node.predecessors = query[1]
         Node.successors = query[2]
         
 def updateNeighbors(askerID, askerIP, askerPort):
     
-    # If already updated, return
-    if askerID in Node.predecessors or askerID in Node.successors or askerID == Node.ID:
+    # If already absorbed, return.
+    absorbed=checkIfAbsorbed(askerID)
+    if absorbed:
         return
+
+    nodeIDs = collectNodesIDs()
+    fewNodes=False
+    if len(nodeIDs)<Node.neighborNum*2+1:
+        fewNodes=True
     
-    # If true, means nodeIDs number is less than segementSize*2+1.
-    fewNodes = False
-    for i in range(Node.segementSize - 1, 0, -1):
-        if Node.predecessors[i][0] == Node.successors[i][0]:
-            fewNodes = True
-            break
-        
     if fewNodes:
         
-        # Collect every node's ID.
-        nodeIDs = []
-        for predecessor in Node.predecessors:
-            if not predecessor[0] in nodeIDs:
-                nodeIDs.append(predecessor[0])
-        for successor in Node.successors:
-            if not successor[0] in nodeIDs:
-                nodeIDs.append(successor[0])
-                
         # Inform everyone the novice
-        for i in nodeIDs:
-            if not i == Node.ID:
+        for ID in nodeIDs:
+            if not ID == Node.ID:
                 query = [8, askerID, askerIP, askerPort]
-                target = []
-                for node in Node.predecessors:
-                    if node[0] == i:
-                        target = node
-                        break
-                for node in Node.predecessors:
-                    if node[0] == i:
-                        target = node
-                        break
-                reactor.connectTCP(target[1], target[0], SendFactory(query))
+                address = getAddressByID(ID)
+                reactor.connectTCP(address[0], address[1], SendFactory(query))
             
         if not Node.ID in nodeIDs:
             nodeIDs.append(Node.ID)
@@ -177,17 +163,17 @@ def updateNeighbors(askerID, askerIP, askerPort):
     else:
         found = False
         # Check if the novice is among predecessors.
-        for i in range(Node.segementSize - 1):
+        for ID in range(Node.neighborNum - 1):
 
             # Find your place!
-            if AIsBetweenBAndC(askerID, Node.predecessors[i + 1], Node.predecessors[i]):
+            if AIsBetweenBAndC(askerID, Node.predecessors[ID + 1][0], Node.predecessors[ID][0]):
                 found = True
                 
                 # Inform neighbor(s) to update their own.
                 query = [8, askerID, askerIP, askerPort]
-                for indexUpdateQuery in range(Node.segementSize - 1):
-                    rightIndex = i - indexUpdateQuery
-                    leftIndex = i + 1 + indexUpdateQuery
+                for indexUpdateQuery in range(Node.neighborNum - 1):
+                    rightIndex = ID - indexUpdateQuery
+                    leftIndex = ID + 1 + indexUpdateQuery
                     
                     # The right side.
                     if rightIndex > 0:
@@ -198,44 +184,44 @@ def updateNeighbors(askerID, askerIP, askerPort):
                         target = Node.successors[rightIndex]
                     reactor.connectTCP(target[1], target[2], SendFactory(query))
                     # The left side.
-                    if leftIndex < Node.segementSize:
+                    if leftIndex < Node.neighborNum:
                         target = Node.predecessors[leftIndex]
                         reactor.connectTCP(target[1], target[2], SendFactory(query))
 
                 # Update myself
-                for indexNeedUpdate in range(Node.segementSize - 1, i + 1, -1):
+                for indexNeedUpdate in range(Node.neighborNum - 1, ID + 1, -1):
                     Node.predecessors[indexNeedUpdate] = Node.predecessors[indexNeedUpdate - 1]
-                Node.predecessors[i + 1] = [askerID, askerIP, askerPort]
+                Node.predecessors[ID + 1] = [askerID, askerIP, askerPort]
                     
         # If the novice is near this node.
-        if AIsBetweenBAndC(Node.predecessors[0], Node.successors[0]):
+        if AIsBetweenBAndC(askerID, Node.predecessors[0][0], Node.successors[0][0]):
             found = True
             onLeft = AIsBetweenBAndC(askerID, Node.predecessors[0], Node.ID)
 
-            for indexNeedUpdate in range(Node.segementSize - 1):
+            for indexNeedUpdate in range(Node.neighborNum - 1):
                 query = [8, askerID, askerIP, askerPort]
                 target = Node.successors[indexNeedUpdate]
                 reactor.connectTCP(target[1], target[2], SendFactory(query))
                 target = Node.predecessors[indexNeedUpdate]
                 reactor.connectTCP(target[1], target[2], SendFactory(query))
-            indexNeedUpdate = Node.segementSize - 1
+            indexNeedUpdate = Node.neighborNum - 1
             if onLeft:
                 target = Node.successors[indexNeedUpdate]
             else:
                 target = Node.predecessors[indexNeedUpdate]
             reactor.connectTCP(target[1], target[2], SendFactory(query))
             
+            predecessors = list(Node.predecessors)
+            successors = list(Node.successors)
             if onLeft:
-                predecessors = list(Node.predecessors)
                 predecessors[0] = [Node.ID, Node.IP, Node.port]
             else:
-                successors = list(Node.successors)
                 successors[0] = [Node.ID, Node.IP, Node.port]
             flushQuery = [81, predecessors, successors]
             reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
 
             # Update myself    
-            for indexNeedUpdate in range(Node.segementSize - 1, 0, -1):
+            for indexNeedUpdate in range(Node.neighborNum - 1, 0, -1):
                 if onLeft:
                     Node.predecessors[indexNeedUpdate] = Node.predecessors[indexNeedUpdate - 1]
                     Node.predecessors[0] = [askerID, askerIP, askerPort]
@@ -244,17 +230,17 @@ def updateNeighbors(askerID, askerIP, askerPort):
                     Node.successors[0] = [askerID, askerIP, askerPort]
                 
         # Check if the novice is among successors.
-        for i in range(Node.segementSize - 1):
+        for ID in range(Node.neighborNum - 1):
 
             # Find your place!
-            if AIsBetweenBAndC(askerID, Node.successors[i], Node.successors[i + 1]):
+            if AIsBetweenBAndC(askerID, Node.successors[ID], Node.successors[ID + 1]):
                 found = True
                 
                 # Inform neighbor(s) to update their own.
                 query = [8, askerID, askerIP, askerPort]
-                for indexUpdateQuery in range(Node.segementSize - 1):
-                    leftIndex = i - indexUpdateQuery
-                    rightIndex = i + 1 + indexUpdateQuery
+                for indexUpdateQuery in range(Node.neighborNum - 1):
+                    leftIndex = ID - indexUpdateQuery
+                    rightIndex = ID + 1 + indexUpdateQuery
                     
                     # The right side.
                     if leftIndex > 0:
@@ -265,14 +251,14 @@ def updateNeighbors(askerID, askerIP, askerPort):
                         target = Node.predecessors[leftIndex]
                     reactor.connectTCP(target[1], target[2], SendFactory(query))
                     # The left side.
-                    if rightIndex < Node.segementSize:
+                    if rightIndex < Node.neighborNum:
                         target = Node.successors[rightIndex]
                         reactor.connectTCP(target[1], target[2], SendFactory(query))
                     
                 # Update myself
-                for indexNeedUpdate in range(Node.segementSize - 1, i + 1, -1):
+                for indexNeedUpdate in range(Node.neighborNum - 1, ID + 1, -1):
                     Node.successors[indexNeedUpdate] = Node.successors[indexNeedUpdate - 1]
-                Node.successors[i + 1] = [askerID, askerIP, askerPort]
+                Node.successors[ID + 1] = [askerID, askerIP, askerPort]
         
         # If this node does not need to update itself.
         if not found:
@@ -289,22 +275,22 @@ def AIsBetweenBAndC(a, b, c):
     else:
         return c
     
-# When there are few nodes, calculate the segement of center.
+# When there are few nodes, calculate the neighbor(s) of center.
 def fewNodesNeighbors(nodes, center):
     indexOfThisNode = nodes.index(center)
     iterator = indexOfThisNode
     predecessors = []
     successors = []
-    for i in range(Node.segementSize):
+    for i in range(Node.neighborNum):
         iterator += 1
-        if iterator >= Node.segementSize:
+        if iterator >= len(nodes):
             iterator = 0
         successors.append(nodes[iterator])
     iterator = indexOfThisNode
-    for i in range(Node.segementSize):
+    for i in range(Node.neighborNum):
         iterator -= 1
         if iterator < 0:
-            iterator = Node.segementSize - 1
+            iterator = len(nodes) - 1
         predecessors.append(nodes[iterator])
     return [predecessors, successors]
         
@@ -321,12 +307,37 @@ def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
     for ID in IDs:
         address = getAddressByID(ID)
         # ID is asker's ID
-        if address==None:
+        if address == None:
             result.append([askerID, askerIP, askerPort])
         else:
             result.append([ID, address[0], address[1]])
     return result
         
+def checkIfAbsorbed(askerID):
+    
+    for predecessor in Node.predecessors:
+        if askerID==predecessor[0]:
+            return True
+    for successor in Node.successors:
+        if askerID==successor[0]:
+            return True
+    if askerID==Node.ID:
+        return True
+    return False
+
+# Collect every node's ID.
+def collectNodesIDs():
+    nodeIDs=[]
+    for predecessor in Node.predecessors:
+            if not predecessor[0] in nodeIDs:
+                nodeIDs.append(predecessor[0])
+    for successor in Node.successors:
+            if not successor[0] in nodeIDs:
+                nodeIDs.append(successor[0])
+    if not Node.ID in nodeIDs:
+        nodeIDs.append(Node.ID)
+    return nodeIDs
+
 def main():
 
         print('Setup argument parser')
