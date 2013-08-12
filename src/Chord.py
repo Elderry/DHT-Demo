@@ -129,6 +129,8 @@ def updateNeighbors(askerID, askerIP, askerPort):
     if absorbed:
         return
 
+    query = [8, askerID, askerIP, askerPort]
+
     nodeIDs = collectNodesIDs()
     fewNodes = False
     if len(nodeIDs) < Node.neighborNum * 2 + 1:
@@ -139,7 +141,6 @@ def updateNeighbors(askerID, askerIP, askerPort):
         # Inform everyone the novice
         for ID in nodeIDs:
             if not ID == Node.ID:
-                query = [8, askerID, askerIP, askerPort]
                 address = getAddressByID(ID)
                 reactor.connectTCP(address[0], address[1], SendFactory(query))
             
@@ -157,8 +158,8 @@ def updateNeighbors(askerID, askerIP, askerPort):
         neighborsIDs = fewNodesNeighbors(nodeIDs, askerID)
         predecessors = completeAddressesByIDs(neighborsIDs[0], askerID, askerIP, askerPort)
         successors = completeAddressesByIDs(neighborsIDs[1], askerID, askerIP, askerPort)
-        query = [81, predecessors, successors]
-        reactor.connectTCP(askerIP, askerPort, SendFactory(query))
+        flushQuery = [81, predecessors, successors]
+        reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
         
     else:
         found = False
@@ -170,7 +171,6 @@ def updateNeighbors(askerID, askerIP, askerPort):
                 found = True
                 
                 # Inform neighbor(s) to update their own.
-                query = [8, askerID, askerIP, askerPort]
                 for indexUpdateQuery in range(Node.neighborNum - 1):
                     rightIndex = ID - indexUpdateQuery
                     leftIndex = ID + 1 + indexUpdateQuery
@@ -196,10 +196,9 @@ def updateNeighbors(askerID, askerIP, askerPort):
         # If the novice is near this node.
         if AIsBetweenBAndC(askerID, Node.predecessors[0][0], Node.successors[0][0]):
             found = True
-            onLeft = AIsBetweenBAndC(askerID, Node.predecessors[0], Node.ID)
+            onLeft = AIsBetweenBAndC(askerID, Node.predecessors[0][0], Node.ID)
 
             for indexNeedUpdate in range(Node.neighborNum - 1):
-                query = [8, askerID, askerIP, askerPort]
                 target = Node.successors[indexNeedUpdate]
                 reactor.connectTCP(target[1], target[2], SendFactory(query))
                 target = Node.predecessors[indexNeedUpdate]
@@ -214,9 +213,13 @@ def updateNeighbors(askerID, askerIP, askerPort):
             predecessors = list(Node.predecessors)
             successors = list(Node.successors)
             if onLeft:
-                predecessors[0] = [Node.ID, Node.IP, Node.port]
-            else:
+                for i in range(Node.neighborNum - 2, -1, -1):
+                    successors[i + 1] = successors[i]
                 successors[0] = [Node.ID, Node.IP, Node.port]
+            else:
+                for i in range(Node.neighborNum - 2, -1, -1):
+                    predecessors[i + 1] = predecessors[i]
+                predecessors[0] = [Node.ID, Node.IP, Node.port]
             flushQuery = [81, predecessors, successors]
             reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
 
@@ -233,11 +236,10 @@ def updateNeighbors(askerID, askerIP, askerPort):
         for ID in range(Node.neighborNum - 1):
 
             # Find your place!
-            if AIsBetweenBAndC(askerID, Node.successors[ID], Node.successors[ID + 1]):
+            if AIsBetweenBAndC(askerID, Node.successors[ID][0], Node.successors[ID + 1][0]):
                 found = True
                 
                 # Inform neighbor(s) to update their own.
-                query = [8, askerID, askerIP, askerPort]
                 for indexUpdateQuery in range(Node.neighborNum - 1):
                     leftIndex = ID - indexUpdateQuery
                     rightIndex = ID + 1 + indexUpdateQuery
@@ -268,12 +270,16 @@ def updateNeighbors(askerID, askerIP, askerPort):
             reactor.connectTCP(target[1], target[2], SendFactory(query))
         
 def AIsBetweenBAndC(a, b, c):
+    # At edge
     if c < b:
-        c += Node.scale
-    if a < c and a > b:
-        return True
+        if a < c:
+            return True
+        if a > b:
+            return True
     else:
-        return c
+        if a < c and a > b:
+            return True
+    return False
     
 # When there are few nodes, calculate the neighbor(s) of center.
 def fewNodesNeighbors(nodes, center):
