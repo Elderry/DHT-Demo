@@ -9,6 +9,7 @@ from pickle import dumps
 from pickle import loads
 from random import seed
 from random import randint
+from time import sleep
 
 class Node:
 
@@ -84,12 +85,81 @@ class Control(Thread):
                 elif command[1] == 'address':
                     print(str([Node.IP, Node.port]))
 
+class Throb(Thread):
+    
+    def run(self):
+        counter = 0
+        while True:
+            sleep(1)
+            counter += 1
+            
+            # Send Throb
+            query = [2, Node.ID]
+            neighborsIDs = collectNodesIDs(False)
+            for neighborID in neighborsIDs:
+                address = getAddressByID(neighborID)
+                reactor.connnectTCP(address[0], address[1], SendFactory(query))
+                
+            # Kill idles
+            expurgate()
+                
+            if counter > 5:
+                counter = 0
+            
 def react(transport, query):
     
     queryType = query[0]
     
-    # Someone wants to join
-    if queryType == 5:
+    print('Query received with type: ' + str(queryType))
+    
+    # Common query.
+    if queryType == 1:
+        ID = query[1]
+        if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
+            # Execute query here.
+            senderIP = query[2]
+            senderPort = query[3]
+            query = [11, Node.ID]
+            reactor.connectTCP(senderIP, senderPort, SendFactory(query))
+        else:
+            sendQueryByIDLinear(ID, query)
+            
+    elif queryType == 11:
+        print('Query executed by ' + str(query[2]))
+        
+    elif queryType == 2:
+        ID = query[1]
+        updateAge(ID)
+        
+    # Ask for neighbor(s).
+    elif queryType == 3:
+
+        needPredecessors = query[1]
+        numNeeded = query[2]
+
+        if needPredecessors:
+            replyNeighbors = Node.predecessors[-numNeeded:]
+        else:
+            replyNeighbors = Node.successors[-numNeeded:]
+
+        replyQuery = [31, needPredecessors, numNeeded, replyNeighbors]
+        transport.write(dumps(replyQuery))
+        
+    elif queryType == 31:
+        
+        needPredecessors = query[1]
+        numNeeded = query[2]
+        newNeighbors = query[3]
+        
+        if needPredecessors:
+            for i in range(Node.neighborNum - numNeeded, Node.neighborNum):
+                Node.predecessors[i] = newNeighbors[i - Node.neighborNum + numNeeded]
+        else:
+            for i in range(Node.neighborNum - numNeeded, Node.neighborNum):
+                Node.successors[i] = newNeighbors[i - Node.neighborNum + numNeeded]
+    
+    # Someone wants to join.
+    elif queryType == 5:
         nickname = query[3]
         query = [51, Node.scale]
         
@@ -129,6 +199,8 @@ def updateNeighbors(askerID, askerIP, askerPort):
     if absorbed:
         return
 
+    query = [8, askerID, askerIP, askerPort]
+
     nodeIDs = collectNodesIDs()
     fewNodes = False
     if len(nodeIDs) < Node.neighborNum * 2 + 1:
@@ -139,7 +211,6 @@ def updateNeighbors(askerID, askerIP, askerPort):
         # Inform everyone the novice
         for ID in nodeIDs:
             if not ID == Node.ID:
-                query = [8, askerID, askerIP, askerPort]
                 address = getAddressByID(ID)
                 reactor.connectTCP(address[0], address[1], SendFactory(query))
             
@@ -157,8 +228,8 @@ def updateNeighbors(askerID, askerIP, askerPort):
         neighborsIDs = fewNodesNeighbors(nodeIDs, askerID)
         predecessors = completeAddressesByIDs(neighborsIDs[0], askerID, askerIP, askerPort)
         successors = completeAddressesByIDs(neighborsIDs[1], askerID, askerIP, askerPort)
-        query = [81, predecessors, successors]
-        reactor.connectTCP(askerIP, askerPort, SendFactory(query))
+        flushQuery = [81, predecessors, successors]
+        reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
         
     else:
         found = False
@@ -170,7 +241,6 @@ def updateNeighbors(askerID, askerIP, askerPort):
                 found = True
                 
                 # Inform neighbor(s) to update their own.
-                query = [8, askerID, askerIP, askerPort]
                 for indexUpdateQuery in range(Node.neighborNum - 1):
                     rightIndex = ID - indexUpdateQuery
                     leftIndex = ID + 1 + indexUpdateQuery
@@ -196,10 +266,9 @@ def updateNeighbors(askerID, askerIP, askerPort):
         # If the novice is near this node.
         if AIsBetweenBAndC(askerID, Node.predecessors[0][0], Node.successors[0][0]):
             found = True
-            onLeft = AIsBetweenBAndC(askerID, Node.predecessors[0], Node.ID)
+            onLeft = AIsBetweenBAndC(askerID, Node.predecessors[0][0], Node.ID)
 
             for indexNeedUpdate in range(Node.neighborNum - 1):
-                query = [8, askerID, askerIP, askerPort]
                 target = Node.successors[indexNeedUpdate]
                 reactor.connectTCP(target[1], target[2], SendFactory(query))
                 target = Node.predecessors[indexNeedUpdate]
@@ -214,9 +283,13 @@ def updateNeighbors(askerID, askerIP, askerPort):
             predecessors = list(Node.predecessors)
             successors = list(Node.successors)
             if onLeft:
-                predecessors[0] = [Node.ID, Node.IP, Node.port]
-            else:
+                for i in range(Node.neighborNum - 2, -1, -1):
+                    successors[i + 1] = successors[i]
                 successors[0] = [Node.ID, Node.IP, Node.port]
+            else:
+                for i in range(Node.neighborNum - 2, -1, -1):
+                    predecessors[i + 1] = predecessors[i]
+                predecessors[0] = [Node.ID, Node.IP, Node.port]
             flushQuery = [81, predecessors, successors]
             reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
 
@@ -233,11 +306,10 @@ def updateNeighbors(askerID, askerIP, askerPort):
         for ID in range(Node.neighborNum - 1):
 
             # Find your place!
-            if AIsBetweenBAndC(askerID, Node.successors[ID], Node.successors[ID + 1]):
+            if AIsBetweenBAndC(askerID, Node.successors[ID][0], Node.successors[ID + 1][0]):
                 found = True
                 
                 # Inform neighbor(s) to update their own.
-                query = [8, askerID, askerIP, askerPort]
                 for indexUpdateQuery in range(Node.neighborNum - 1):
                     leftIndex = ID - indexUpdateQuery
                     rightIndex = ID + 1 + indexUpdateQuery
@@ -268,12 +340,16 @@ def updateNeighbors(askerID, askerIP, askerPort):
             reactor.connectTCP(target[1], target[2], SendFactory(query))
         
 def AIsBetweenBAndC(a, b, c):
+    # At edge
     if c < b:
-        c += Node.scale
-    if a < c and a > b:
-        return True
+        if a < c:
+            return True
+        if a > b:
+            return True
     else:
-        return c
+        if a < c and a > b:
+            return True
+    return False
     
 # When there are few nodes, calculate the neighbor(s) of center.
 def fewNodesNeighbors(nodes, center):
@@ -328,17 +404,93 @@ def checkIfAbsorbed(askerID):
     return False
 
 # Collect every node's ID.
-def collectNodesIDs():
+def collectNodesIDs(includeSelf=True):
     nodeIDs = []
     for predecessor in Node.predecessors:
-            if not predecessor[0] in nodeIDs:
-                nodeIDs.append(predecessor[0])
+        if not predecessor[0] in nodeIDs:
+            nodeIDs.append(predecessor[0])
     for successor in Node.successors:
-            if not successor[0] in nodeIDs:
-                nodeIDs.append(successor[0])
-    if not Node.ID in nodeIDs:
+        if not successor[0] in nodeIDs:
+            nodeIDs.append(successor[0])
+    if not Node.ID in nodeIDs and includeSelf:
         nodeIDs.append(Node.ID)
+    if not includeSelf:
+        for ID in nodeIDs:
+            if ID == Node.ID:
+                nodeIDs.pop(nodeIDs.index(ID))
     return nodeIDs
+
+def sendQueryByIDLinear(ID, query):
+
+    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.predecessors[-1][0]):
+        target = Node.successors[-1]
+    elif AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
+        target = Node.successors[0]
+    else:
+        for i in range(Node.neighborNum - 1):
+            if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
+                target = Node.successors[i + 1]
+        for i in range(Node.neighborNum - 1):
+            if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
+                target = Node.predecessors[i]
+
+    reactor.connectTCP(target[1], target[2], SendFactory(query)) 
+    
+def updateAge(ID):
+
+    for predecessor in Node.predecessors:
+        if predecessor[0] == ID:
+            predecessor[3] = 0
+            return
+    for successor in Node.successors:
+        if successor[0] == ID:
+            successor[3] = 0
+            return
+        
+def expurgate():
+
+    predecessorNeeded = 0
+    successorNeeded = 0
+    deadNeighborIndex = getDeadNeighbor(Node.predecessors)
+    while not deadNeighborIndex == -1:
+        for i in range(deadNeighborIndex, Node.neighborNum - 1):
+            if Node.predecessors[i + 1][0] == -1:
+                break
+            Node.predecessors[i] = Node.predecessors[i + 1]
+        deadNeighborIndex = getDeadNeighbor(Node.predecessors)
+        predecessorNeeded += 1
+    deadNeighborIndex = getDeadNeighbor(Node.successors)
+    while not deadNeighborIndex == -1:
+        for i in range(deadNeighborIndex, Node.neighborNum - 1):
+            if Node.successors[i + 1][0] == -1:
+                break
+            Node.successors[i] = Node.successors[i + 1]
+        deadNeighborIndex = getDeadNeighbor(Node.successors)
+        successorNeeded -= 1
+        
+    # This node is dead.
+    if predecessorNeeded >= Node.neighborNum or successorNeeded >= Node.neighborNum:
+        return -1
+    
+    if predecessorNeeded > 0:
+        query = [3, True, predecessorNeeded]
+        lastAlivePredecessorIndex = Node.neighborNum - predecessorNeeded - 1
+        target = Node.predecessors[lastAlivePredecessorIndex]
+        reactor.connectTCP(target[1], target[2], SendFactory(query))
+    if successorNeeded > 0:
+        query = [3, False, successorNeeded]
+        lastAliveSuccessorIndex = Node.neighborNum - successorNeeded - 1
+        target = Node.successors[lastAliveSuccessorIndex]
+        reactor.connectTCP(target[1], target[2], SendFactory(query))
+
+# -1 means all neighbors are healthy
+def getDeadNeighbor(neighbors):
+    for i in range(Node.neighborNum):
+        if neighbors[i][0] == -1:
+            break
+        if neighbors[i][3] > 5:
+            return i
+    return -1
 
 def main():
 
@@ -359,8 +511,6 @@ def main():
         Node.IP = args.IP
         Node.port = args.port[0]
         
-        Control().start()
-        
         reactor.listenTCP(Node.port, ListenFactory())
         print('Ready to listen at port ' + str(Node.port))
         
@@ -369,5 +519,9 @@ def main():
             reactor.connectTCP('localhost', 8000, SendFactory(query))
 
         reactor.run()
+
+        Control().start()
+        
+        Throb().start()
 
 main()

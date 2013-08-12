@@ -1,14 +1,19 @@
 Each query is a list whose first element is query type
 
-[Result]: True:Success, False:Fail
+<Result>: True:Success, False:Fail
 
-First three element: <type>
+First element: <type>
 
-1:	ask node ID
-11:	reply node ID
-2:	shut down
-3:	sleep
-	<time(in seconds)>
+1:	common query
+	<target ID, sender IP, sender port, query body>
+11:	reply of common query
+	<executor ID, Result>
+2:	Throb
+	<ID>
+3:	ask for neighbors
+	<predecessors(True) or successors(False)> <number of neighbor needed>
+31:	reply neighbors
+	<predecessors(True) or successors(False)> <number of neighbor needed> <neighbors needed>
 4:	wake up
 5:	ask for joining
 	<nickname>
