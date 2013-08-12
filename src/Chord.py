@@ -79,9 +79,9 @@ class Control(Thread):
                     print(str(Node.predecessors))
                     print('Successors: ')
                     print(str(Node.successors))
-                elif command[1]=='ID':
+                elif command[1] == 'ID':
                     print(Node.ID)
-                elif command[1]=='address':
+                elif command[1] == 'address':
                     print(str([Node.IP, Node.port]))
 
 def react(transport, query):
@@ -125,14 +125,14 @@ def react(transport, query):
 def updateNeighbors(askerID, askerIP, askerPort):
     
     # If already absorbed, return.
-    absorbed=checkIfAbsorbed(askerID)
+    absorbed = checkIfAbsorbed(askerID)
     if absorbed:
         return
 
     nodeIDs = collectNodesIDs()
-    fewNodes=False
-    if len(nodeIDs)<Node.neighborNum*2+1:
-        fewNodes=True
+    fewNodes = False
+    if len(nodeIDs) < Node.neighborNum * 2 + 1:
+        fewNodes = True
     
     if fewNodes:
         
@@ -301,6 +301,8 @@ def getAddressByID(ID):
     for node in Node.successors:
         if node[0] == ID:
             return [node[1], node[2]]
+    if ID == Node.ID:
+        return [Node.IP, Node.port]
 
 def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
     result = []
@@ -316,18 +318,18 @@ def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
 def checkIfAbsorbed(askerID):
     
     for predecessor in Node.predecessors:
-        if askerID==predecessor[0]:
+        if askerID == predecessor[0]:
             return True
     for successor in Node.successors:
-        if askerID==successor[0]:
+        if askerID == successor[0]:
             return True
-    if askerID==Node.ID:
+    if askerID == Node.ID:
         return True
     return False
 
 # Collect every node's ID.
 def collectNodesIDs():
-    nodeIDs=[]
+    nodeIDs = []
     for predecessor in Node.predecessors:
             if not predecessor[0] in nodeIDs:
                 nodeIDs.append(predecessor[0])
