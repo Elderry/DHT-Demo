@@ -27,6 +27,10 @@ class Node:
 
     successors = [[0, 'localhost', 8000, 0], [0, 'localhost', 8000, 0]]
     predecessors = [[0, 'localhost', 8000, 0], [0, 'localhost', 8000, 0]]
+    
+    # In sesonds.
+    throbInterval = 1
+    neighborDeathInterval = 5
 
 class Send(protocol.Protocol):
     
@@ -102,7 +106,7 @@ class Throb(Thread):
             
             # Send Throb, 3 seconds a time.
             counter += 1
-            if counter == 3:
+            if counter == Node.throbInterval:
                 query = [2, Node.ID]
                 neighborsIDs = collectNodesIDs(False)
                 for neighborID in neighborsIDs:
@@ -147,9 +151,9 @@ def react(transport, query):
         numNeeded = query[2]
 
         if needPredecessors:
-            replyNeighbors = Node.predecessors[-numNeeded:]
+            replyNeighbors = Node.predecessors[:numNeeded]
         else:
-            replyNeighbors = Node.successors[-numNeeded:]
+            replyNeighbors = Node.successors[:numNeeded]
 
         replyQuery = [31, needPredecessors, numNeeded, replyNeighbors]
         transport.write(dumps(replyQuery))
@@ -270,7 +274,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
                 # Update myself
                 for indexNeedUpdate in range(Node.neighborNum - 1, ID + 1, -1):
                     Node.predecessors[indexNeedUpdate] = Node.predecessors[indexNeedUpdate - 1]
-                Node.predecessors[ID + 1] = [askerID, askerIP, askerPort]
+                Node.predecessors[ID + 1] = [askerID, askerIP, askerPort, 0]
                     
         # If the novice is near this node.
         if AIsBetweenBAndC(askerID, Node.predecessors[0][0], Node.successors[0][0]):
@@ -339,7 +343,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
                 # Update myself
                 for indexNeedUpdate in range(Node.neighborNum - 1, ID + 1, -1):
                     Node.successors[indexNeedUpdate] = Node.successors[indexNeedUpdate - 1]
-                Node.successors[ID + 1] = [askerID, askerIP, askerPort]
+                Node.successors[ID + 1] = [askerID, askerIP, askerPort, 0]
         
         # If this node does not need to update itself.
         if not found:
@@ -350,10 +354,12 @@ def updateNeighbors(askerID, askerIP, askerPort):
         
 def growNeighbors():
     for neighbor in Node.predecessors:
-        if not neighbor[0] == Node.ID:
+        ID = neighbor[0]
+        if not ID == Node.ID and not ID == -1:
             neighbor[3] += 1
     for neighbor in Node.successors:
-        if not neighbor[0] == Node.ID:
+        ID = neighbor[0]
+        if not ID == Node.ID and not ID == -1:
             neighbor[3] += 1
 
 def AIsBetweenBAndC(a, b, c):
@@ -476,46 +482,49 @@ def updateAge(ID):
         
 def expurgateNeighbors():
 
-    predecessorNeeded = 0
-    successorNeeded = 0
-    deadNeighborIndex = getDeadNeighbor(Node.predecessors)
-    while not deadNeighborIndex == -1:
-        for i in range(deadNeighborIndex, Node.neighborNum - 1):
-            if Node.predecessors[i + 1][0] == -1:
-                break
-            Node.predecessors[i] = Node.predecessors[i + 1]
-        deadNeighborIndex = getDeadNeighbor(Node.predecessors)
-        predecessorNeeded += 1
-    deadNeighborIndex = getDeadNeighbor(Node.successors)
-    while not deadNeighborIndex == -1:
-        for i in range(deadNeighborIndex, Node.neighborNum - 1):
-            if Node.successors[i + 1][0] == -1:
-                break
-            Node.successors[i] = Node.successors[i + 1]
-        deadNeighborIndex = getDeadNeighbor(Node.successors)
-        successorNeeded -= 1
+    lastAlivePredecessor = permuteNeighbors(Node.predecessors)
+    lastAliveSuccessor = permuteNeighbors(Node.successors)
+
+    predecessorNeeded = Node.neighborNum - 1 - lastAlivePredecessor
+    successorNeeded = Node.neighborNum - 1 - lastAliveSuccessor
         
     # This node is dead.
     if predecessorNeeded >= Node.neighborNum or successorNeeded >= Node.neighborNum:
-        return -1
+        print('Sorry, this node can no longer live.')
+        exit()
     
     if predecessorNeeded > 0:
         query = [3, True, predecessorNeeded]
-        lastAlivePredecessorIndex = Node.neighborNum - predecessorNeeded - 1
-        target = Node.predecessors[lastAlivePredecessorIndex]
+        target = Node.predecessors[lastAlivePredecessor]
         reactor.connectTCP(target[1], target[2], SendFactory(query))
     if successorNeeded > 0:
         query = [3, False, successorNeeded]
-        lastAliveSuccessorIndex = Node.neighborNum - successorNeeded - 1
-        target = Node.successors[lastAliveSuccessorIndex]
+        target = Node.successors[lastAliveSuccessor]
         reactor.connectTCP(target[1], target[2], SendFactory(query))
+
+# Return the index of last alive neighbor.
+def permuteNeighbors(neighbors):
+    deadNeighborIndex = getDeadNeighbor(neighbors)
+    lastAliveIndex = Node.neighborNum - 1
+    while not deadNeighborIndex == -1:
+        lastAliveIndex -= 1
+        for i in range(deadNeighborIndex, Node.neighborNum - 1):
+            if neighbors[i + 1][0] == -1:
+                neighbors[i][0] = -1
+                break
+            neighbors[i] = list(neighbors[i + 1])
+            if i == Node.neighborNum - 2:
+                neighbors[i + 1][0] = -1
+        deadNeighborIndex = getDeadNeighbor(neighbors)
+    return lastAliveIndex
 
 # -1 means all neighbors are healthy
 def getDeadNeighbor(neighbors):
     for i in range(Node.neighborNum):
         if neighbors[i][0] == -1:
             break
-        if neighbors[i][3] > 15:
+        if neighbors[i][3] > Node.neighborDeathInterval:
+            neighbors[i][0] = -1
             return i
     return -1
 
