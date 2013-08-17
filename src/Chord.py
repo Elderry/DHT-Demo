@@ -25,8 +25,8 @@ class Node:
     # Number of successors or predecessors
     neighborNum = 2
 
-    successors = [[0, 'localhost', 8000], [0, 'localhost', 8000]]
-    predecessors = [[0, 'localhost', 8000], [0, 'localhost', 8000]]
+    successors = [[0, 'localhost', 8000, 0], [0, 'localhost', 8000, 0]]
+    predecessors = [[0, 'localhost', 8000, 0], [0, 'localhost', 8000, 0]]
 
 class Send(protocol.Protocol):
     
@@ -39,8 +39,12 @@ class Send(protocol.Protocol):
     def dataReceived(self, rawData):
 
         data = loads(rawData)
+
+        '''
         queryType = data[0]
-        print('Received a query, type is ' + str(data[0]) + '.')
+        print('Received a query, type is ' + str(queryType) + '.')
+        '''
+
         react(self.transport, data)
 
 class SendFactory(protocol.ClientFactory):
@@ -54,9 +58,13 @@ class SendFactory(protocol.ClientFactory):
 class Listen(protocol.Protocol):
     
     def dataReceived(self, rawData):
+
         data = loads(rawData)
+        
+        '''
         queryType = data[0]
-        print('Received a query, type is ' + str(data[0]))
+        print('Received a query, type is ' + str(queryType))
+        '''
         
         react(self.transport, data)
         
@@ -91,26 +99,27 @@ class Throb(Thread):
         counter = 0
         while True:
             sleep(1)
-            counter += 1
             
-            # Send Throb
-            query = [2, Node.ID]
-            neighborsIDs = collectNodesIDs(False)
-            for neighborID in neighborsIDs:
-                address = getAddressByID(neighborID)
-                reactor.connnectTCP(address[0], address[1], SendFactory(query))
+            # Send Throb, 3 seconds a time.
+            counter += 1
+            if counter == 3:
+                query = [2, Node.ID]
+                neighborsIDs = collectNodesIDs(False)
+                for neighborID in neighborsIDs:
+                    address = getAddressByID(neighborID)
+                    reactor.connectTCP(address[0], address[1], SendFactory(query))
+                counter = 0
+                
+            growNeighbors()
                 
             # Kill idles
-            expurgate()
-                
-            if counter > 5:
-                counter = 0
+            expurgateNeighbors()
             
 def react(transport, query):
     
     queryType = query[0]
     
-    print('Query received with type: ' + str(queryType))
+    # print('Query received with type: ' + str(queryType))
     
     # Common query.
     if queryType == 1:
@@ -285,11 +294,11 @@ def updateNeighbors(askerID, askerIP, askerPort):
             if onLeft:
                 for i in range(Node.neighborNum - 2, -1, -1):
                     successors[i + 1] = successors[i]
-                successors[0] = [Node.ID, Node.IP, Node.port]
+                successors[0] = [Node.ID, Node.IP, Node.port, 0]
             else:
                 for i in range(Node.neighborNum - 2, -1, -1):
                     predecessors[i + 1] = predecessors[i]
-                predecessors[0] = [Node.ID, Node.IP, Node.port]
+                predecessors[0] = [Node.ID, Node.IP, Node.port, 0]
             flushQuery = [81, predecessors, successors]
             reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
 
@@ -297,10 +306,10 @@ def updateNeighbors(askerID, askerIP, askerPort):
             for indexNeedUpdate in range(Node.neighborNum - 1, 0, -1):
                 if onLeft:
                     Node.predecessors[indexNeedUpdate] = Node.predecessors[indexNeedUpdate - 1]
-                    Node.predecessors[0] = [askerID, askerIP, askerPort]
+                    Node.predecessors[0] = [askerID, askerIP, askerPort, 0]
                 else:
                     Node.successors[indexNeedUpdate] = Node.successors[indexNeedUpdate - 1]
-                    Node.successors[0] = [askerID, askerIP, askerPort]
+                    Node.successors[0] = [askerID, askerIP, askerPort, 0]
                 
         # Check if the novice is among successors.
         for ID in range(Node.neighborNum - 1):
@@ -339,6 +348,14 @@ def updateNeighbors(askerID, askerIP, askerPort):
             target = Node.successors[-1]
             reactor.connectTCP(target[1], target[2], SendFactory(query))
         
+def growNeighbors():
+    for neighbor in Node.predecessors:
+        if not neighbor[0] == Node.ID:
+            neighbor[3] += 1
+    for neighbor in Node.successors:
+        if not neighbor[0] == Node.ID:
+            neighbor[3] += 1
+
 def AIsBetweenBAndC(a, b, c):
     # At edge
     if c < b:
@@ -350,7 +367,7 @@ def AIsBetweenBAndC(a, b, c):
         if a < c and a > b:
             return True
     return False
-    
+
 # When there are few nodes, calculate the neighbor(s) of center.
 def fewNodesNeighbors(nodes, center):
     indexOfThisNode = nodes.index(center)
@@ -379,16 +396,26 @@ def getAddressByID(ID):
             return [node[1], node[2]]
     if ID == Node.ID:
         return [Node.IP, Node.port]
+    
+def getNeighborByID(ID):
+    for node in Node.predecessors:
+        if node[0] == ID:
+            return node
+    for node in Node.successors:
+        if node[0] == ID:
+            return node
+    if ID == Node.ID:
+        return [ID, Node.IP, Node.port, 0]
 
 def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
     result = []
     for ID in IDs:
-        address = getAddressByID(ID)
+        neighbor = getNeighborByID(ID)
         # ID is asker's ID
-        if address == None:
-            result.append([askerID, askerIP, askerPort])
+        if neighbor == None:
+            result.append([askerID, askerIP, askerPort, 0])
         else:
-            result.append([ID, address[0], address[1]])
+            result.append(neighbor)
     return result
         
 def checkIfAbsorbed(askerID):
@@ -447,7 +474,7 @@ def updateAge(ID):
             successor[3] = 0
             return
         
-def expurgate():
+def expurgateNeighbors():
 
     predecessorNeeded = 0
     successorNeeded = 0
@@ -488,7 +515,7 @@ def getDeadNeighbor(neighbors):
     for i in range(Node.neighborNum):
         if neighbors[i][0] == -1:
             break
-        if neighbors[i][3] > 5:
+        if neighbors[i][3] > 15:
             return i
     return -1
 
@@ -518,10 +545,10 @@ def main():
             query = [5, Node.IP, Node.port, Node.nickname]
             reactor.connectTCP('localhost', 8000, SendFactory(query))
 
-        reactor.run()
-
         Control().start()
         
         Throb().start()
+
+        reactor.run()
 
 main()
