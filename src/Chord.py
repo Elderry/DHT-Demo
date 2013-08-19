@@ -32,7 +32,7 @@ class Node:
     throbInterval = 1
     neighborDeathInterval = 5
     
-    running=False
+    running = False
 
 class Send(protocol.Protocol):
     
@@ -85,9 +85,9 @@ class Control(Thread):
         while Node.running:
             raw = raw_input('Please input your command:\n')
             command = raw.split(' ')
-            commandType=command[0]
+            commandType = command[0]
             
-            if commandType== 'show':
+            if commandType == 'show':
                 if command[1] == 'nickname':
                     print(Node.nickname)
                 elif command[1] == 'neighbors':
@@ -100,9 +100,14 @@ class Control(Thread):
                 elif command[1] == 'address':
                     print(str([Node.IP, Node.port]))
 
-            elif commandType=='exit':
+            elif commandType == 'exit':
                 reactor.stop()
-                Node.running=False
+                Node.running = False
+                
+            elif commandType=='query':
+                queryBody=command[1]
+                seed(queryBody)
+
         print('Control thread is ending.')
 
 class Throb(Thread):
@@ -112,7 +117,7 @@ class Throb(Thread):
         while Node.running:
             sleep(1)
             
-            # Send Throb, 3 seconds a time.
+            # Send Throb, <Node.throbInterval> seconds a time.
             counter += 1
             if counter == Node.throbInterval:
                 query = [2, Node.ID]
@@ -450,10 +455,10 @@ def checkIfAbsorbed(askerID):
 def collectNodesIDs(includeSelf=True):
     nodeIDs = []
     for predecessor in Node.predecessors:
-        if not predecessor[0] in nodeIDs:
+        if not predecessor[0] in nodeIDs and not predecessor[0] == -1:
             nodeIDs.append(predecessor[0])
     for successor in Node.successors:
-        if not successor[0] in nodeIDs:
+        if not successor[0] in nodeIDs and not successor[0] == -1:
             nodeIDs.append(successor[0])
     if not Node.ID in nodeIDs and includeSelf:
         nodeIDs.append(Node.ID)
@@ -484,11 +489,9 @@ def updateAge(ID):
     for predecessor in Node.predecessors:
         if predecessor[0] == ID:
             predecessor[3] = 0
-            return
     for successor in Node.successors:
         if successor[0] == ID:
             successor[3] = 0
-            return
         
 def expurgateNeighbors():
 
@@ -500,7 +503,9 @@ def expurgateNeighbors():
         
     # This node is dead.
     if predecessorNeeded >= Node.neighborNum or successorNeeded >= Node.neighborNum:
-        print('Sorry, this node can no longer live.')
+        print('This node can no longer live because too many neighbors dead.')
+        Node.running = False
+        reactor.stop()
         exit()
     
     if predecessorNeeded > 0:
@@ -564,7 +569,7 @@ def main():
             query = [5, Node.IP, Node.port, Node.nickname]
             reactor.connectTCP('localhost', 8000, SendFactory(query))
 
-        Node.running=True
+        Node.running = True
 
         Control().start()
         
