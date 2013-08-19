@@ -40,7 +40,13 @@ class Send(protocol.Protocol):
         self.factory = SendFactory
     
     def connectionMade(self):
+
+        query=self.factory.query
+        queryType=query[0]
         self.transport.write(dumps(self.factory.query))
+        # Close used connection.
+        if not queryType==3 and not queryType==5 and not queryType==7:
+            self.transport.loseConnection()
         
     def dataReceived(self, rawData):
 
@@ -138,7 +144,7 @@ def react(transport, query):
     
     queryType = query[0]
     
-    print('Query received with type: ' + str(queryType))
+    # print('Query received with type: ' + str(queryType))
     
     # Common query.
     if queryType == 1:

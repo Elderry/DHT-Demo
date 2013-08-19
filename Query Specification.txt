@@ -6,24 +6,22 @@ First element: <type>
 
 1:	common query
 	<target ID, sender IP, sender port, query body>
-11:	reply of common query
-	<executor ID, Result>
 2:	Throb
 	<ID>
 3:	ask for neighbors
 	<predecessors(True) or successors(False)> <number of neighbor needed>
 31:	reply neighbors
 	<predecessors(True) or successors(False)> <number of neighbor needed> <neighbors needed>
-4:	wake up
+4:	report of common query execute condition
+	<executor ID, Result>
 5:	ask for joining
 	<nickname>
 51:	acknowledge to join
 	<scale>
-6:	palpitate
+6:	flush predecessor(s) and successor(s)
+	<predecessor(s), successor(s)>
 7:	ask node nickname
 71:	reply node nickname	
 	<nick name>
 8:	update predecessor(s) and successor(s)
 	<ID, ip, port>
-81:	flush predecessor(s) and successor(s)
-	<predecessor(s), successor(s)>
