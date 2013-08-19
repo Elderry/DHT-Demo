@@ -31,6 +31,8 @@ class Node:
     # In sesonds.
     throbInterval = 1
     neighborDeathInterval = 5
+    
+    running=False
 
 class Send(protocol.Protocol):
     
@@ -80,11 +82,12 @@ class ListenFactory(protocol.ServerFactory):
 class Control(Thread):
 
     def run(self):
-        while True:
+        while Node.running:
             raw = raw_input('Please input your command:\n')
             command = raw.split(' ')
+            commandType=command[0]
             
-            if command[0] == 'show':
+            if commandType== 'show':
                 if command[1] == 'nickname':
                     print(Node.nickname)
                 elif command[1] == 'neighbors':
@@ -97,11 +100,16 @@ class Control(Thread):
                 elif command[1] == 'address':
                     print(str([Node.IP, Node.port]))
 
+            elif commandType=='exit':
+                reactor.stop()
+                Node.running=False
+        print('Control thread is ending.')
+
 class Throb(Thread):
     
     def run(self):
         counter = 0
-        while True:
+        while Node.running:
             sleep(1)
             
             # Send Throb, 3 seconds a time.
@@ -118,6 +126,8 @@ class Throb(Thread):
                 
             # Kill idles
             expurgateNeighbors()
+
+        print('Throbbing thread is ending.')
             
 def react(transport, query):
     
@@ -554,10 +564,14 @@ def main():
             query = [5, Node.IP, Node.port, Node.nickname]
             reactor.connectTCP('localhost', 8000, SendFactory(query))
 
+        Node.running=True
+
         Control().start()
         
         Throb().start()
 
         reactor.run()
+        
+        print('Main thread is ending.')
 
 main()
