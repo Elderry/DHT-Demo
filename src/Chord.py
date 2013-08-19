@@ -30,7 +30,7 @@ class Node:
     
     # In sesonds.
     throbInterval = 1
-    neighborDeathInterval = 5
+    neighborDeathInterval = 100
     
     running = False
 
@@ -138,7 +138,7 @@ def react(transport, query):
     
     queryType = query[0]
     
-    # print('Query received with type: ' + str(queryType))
+    print('Query received with type: ' + str(queryType))
     
     # Common query.
     if queryType == 1:
@@ -434,9 +434,9 @@ def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
         neighbor = getNeighborByID(ID)
         # ID is asker's ID
         if neighbor == None:
-            result.append([askerID, askerIP, askerPort, 0])
+            result.append(list([askerID, askerIP, askerPort, 0]))
         else:
-            result.append(neighbor)
+            result.append(list(neighbor))
     return result
         
 def checkIfAbsorbed(askerID):
