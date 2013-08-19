@@ -104,8 +104,8 @@ class Control(Thread):
                 reactor.stop()
                 Node.running = False
                 
-            elif commandType=='query':
-                queryBody=command[1]
+            elif commandType == 'query':
+                queryBody = command[1]
                 seed(queryBody)
 
         print('Control thread is ending.')
