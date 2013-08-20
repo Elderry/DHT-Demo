@@ -30,7 +30,7 @@ class Node:
     
     # In sesonds.
     throbInterval = 1
-    neighborDeathInterval = 100
+    neighborDeathInterval = 5
     
     running = False
 
@@ -41,11 +41,11 @@ class Send(protocol.Protocol):
     
     def connectionMade(self):
 
-        query=self.factory.query
-        queryType=query[0]
+        query = self.factory.query
+        queryType = query[0]
         self.transport.write(dumps(self.factory.query))
         # Close used connection.
-        if not queryType==3 and not queryType==5 and not queryType==7:
+        if not queryType == 3 and not queryType == 5 and not queryType == 7:
             self.transport.loseConnection()
         
     def dataReceived(self, rawData):
@@ -58,6 +58,8 @@ class Send(protocol.Protocol):
         '''
 
         react(self.transport, data)
+        
+        self.transport.loseConnection()
 
 class SendFactory(protocol.ClientFactory):
     
@@ -113,6 +115,10 @@ class Control(Thread):
             elif commandType == 'query':
                 queryBody = command[1]
                 seed(queryBody)
+                executorID = randint(1, Node.scale)
+                print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
+                query = [1, executorID, Node.IP, Node.port, queryBody]
+                reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
 
         print('Control thread is ending.')
 
@@ -159,7 +165,7 @@ def react(transport, query):
             sendQueryByIDLinear(ID, query)
             
     elif queryType == 11:
-        print('Query executed by ' + str(query[2]))
+        print('Query executed by ' + str(query[1]))
         
     elif queryType == 2:
         ID = query[1]

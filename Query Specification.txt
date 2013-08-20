@@ -13,7 +13,7 @@ First element: <type>
 31:	reply neighbors
 	<predecessors(True) or successors(False)> <number of neighbor needed> <neighbors needed>
 4:	report of common query execute condition
-	<executor ID, Result>
+	<executor ID> <Result>
 5:	ask for joining
 	<nickname>
 51:	acknowledge to join
