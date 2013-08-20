@@ -171,7 +171,10 @@ def react(transport, query):
             query = [11, Node.ID]
             reactor.connectTCP(senderIP, senderPort, SendFactory(query))
         else:
-            sendQueryByIDLinear(ID, query)
+            target=getTargetByID(ID)[1]
+            targetIP=target[1]
+            targetPort=target[2]
+            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
             
     elif queryType == 11:
         print('Query executed by ' + str(query[1]))
@@ -291,16 +294,45 @@ def getTargetByIDLinear(ID):
         
 def getTargetByID(ID):
 
-    if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
-        return Node.shortcusts[-1]
+    if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
+        return [False, Node.predecessors[0]]
     if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
-        return Node.successors[0]
+        return [False, Node.successors[0]]
     for i in range(Node.neighborNum - 1):
         if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
-            return Node.successors[i + 1]
+            return [False, Node.successors[i + 1]]
     for i in range(Node.neighborNum - 1):
         if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
-            return Node.predecessors[i]
+            return [False, Node.predecessors[i]]
+    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0]):
+        needToSend = ID == Node.shortcuts[0][0]
+        return [needToSend, Node.shortcuts[0][0]]
+    if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
+        needToSend = ID == Node.predecessors[-1][0]
+        return [needToSend, Node.predecessors[-1][0]]
+    for i in range(Node.shortcutNum-1):
+        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i+1][0]):
+            needToSend = ID == Node.predecessors[i+1][0]
+            return [needToSend, Node.predecessors[i+1][0]]
+            
+def updateNeighbors(askerID, askerIP, askerPort):
+    
+    # If already absorbed, return.
+    absorbed = checkIfAbsorbed(askerID)
+    if absorbed:
+        return
+
+    query = [8, askerID, askerIP, askerPort]
+
+    nodeIDs = collectNodesIDs()
+    fewNodes = False
+    if len(nodeIDs) < Node.neighborNum * 2 + 1:
+        fewNodes = True
+    
+    if fewNodes:
+        
+        # Inform everyone the novice
+        for ID in nodeIDs:
             
 def updateNeighbors(askerID, askerIP, askerPort):
     
@@ -550,12 +582,6 @@ def collectNodesIDs(includeSelf=True):
                 nodeIDs.pop(nodeIDs.index(ID))
     return nodeIDs
 
-def sendQueryByIDLinear(ID, query):
-
-    
-
-    reactor.connectTCP(target[1], target[2], SendFactory(query)) 
-    
 def updateAge(ID):
 
     for predecessor in Node.predecessors:
