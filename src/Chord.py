@@ -29,8 +29,8 @@ class Node:
     # Number of successors or predecessors.
     neighborNum = 2
 
-    successors = [0, 'localhost', 8000, 0] * neighborNum
-    predecessors = [0, 'localhost', 8000, 0] * neighborNum
+    successors = [[ID, IP, port, 0]] * neighborNum
+    predecessors = [[ID, IP, port, 0]] * neighborNum
     
     knowSomeNeighbors = False
     
@@ -39,7 +39,7 @@ class Node:
     
     # In sesonds.
     throbInterval = 1
-    neighborDeathInterval = 5
+    neighborDeathInterval = 10000
     
     running = False
 
@@ -105,17 +105,22 @@ class Control(Thread):
             commandType = command[0]
             
             if commandType == 'show':
-                if command[1] == 'nickname':
+                variable = command[1]
+                if variable == 'nickname':
                     print(Node.nickname)
-                elif command[1] == 'neighbors':
+                elif variable == 'neighbors':
                     print('Predecessors: ')
                     print(str(Node.predecessors))
                     print('Successors: ')
                     print(str(Node.successors))
-                elif command[1] == 'ID':
+                elif variable == 'ID':
                     print(Node.ID)
-                elif command[1] == 'address':
+                elif variable == 'address':
                     print(str([Node.IP, Node.port]))
+                elif variable == 'shortcuts':
+                    print(str(Node.shortcuts))
+                elif variable == 'shortcutNum':
+                    print(str(Node.shortcutNum))
 
             elif commandType == 'exit':
                 reactor.stop()
@@ -124,7 +129,7 @@ class Control(Thread):
             elif commandType == 'query':
                 queryBody = command[1]
                 seed(queryBody)
-                executorID = randint(1, Node.scale)
+                executorID = randint(1, Node.scale - 1)
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
                 query = [1, executorID, Node.IP, Node.port, queryBody]
                 reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
@@ -135,6 +140,7 @@ class Throb(Thread):
     
     def run(self):
         counter = 0
+        shortcutCounter = 0
         while Node.running:
             sleep(1)
             
@@ -147,6 +153,11 @@ class Throb(Thread):
                     address = getAddressByID(neighborID)
                     reactor.connectTCP(address[0], address[1], SendFactory(query))
                 counter = 0
+                
+            shortcutCounter += 1
+            if shortcutCounter == 10:
+                askToUpdateShortcuts()
+                shortcutCounter = 0
                 
             growNeighbors()
                 
@@ -171,9 +182,9 @@ def react(transport, query):
             query = [11, Node.ID]
             reactor.connectTCP(senderIP, senderPort, SendFactory(query))
         else:
-            target=getTargetByID(ID)[1]
-            targetIP=target[1]
-            targetPort=target[2]
+            target = getTargetByID(ID)[1]
+            targetIP = target[1]
+            targetPort = target[2]
             reactor.connectTCP(targetIP, targetPort, SendFactory(query))
             
     elif queryType == 11:
@@ -223,7 +234,7 @@ def react(transport, query):
     elif queryType == 51:
         Node.scale = query[1]
         seed(Node.nickname)
-        Node.ID = randint(1, Node.scale)
+        Node.ID = randint(1, Node.scale - 1)
         print('Joining query has been approved.')
         print('Scale of this network: ' + str(Node.scale) + '.')
         print(Node.nickname + '\'s ID: ' + str(Node.ID) + '.')
@@ -245,11 +256,9 @@ def react(transport, query):
             print('Ready to flush neighbor(s).')
             Node.predecessors = query[1]
             Node.successors = query[2]
-            askForShortcuts()
-            for i in range(0, Node.shortcutNum):
-                IDNeeded = 2 ** (Node.scaleOrder - 1 - i)
-                query = [9, IDNeeded, Node.IP, Node.port]
-                reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+            Node.knowSomeNeighbors = True
+            
+            askToUpdateShortcuts()
                 
     # Ask who is responsible for a specific ID.
     elif queryType == 9:
@@ -275,14 +284,26 @@ def react(transport, query):
         specificID = query[1]
         ID = query[2]
         IP = query[3]
-        port = query[3]
-        specificIndex = Node.scaleOrder - log(specificID, 2) - 1
+        port = query[4]
+        specificID -= Node.ID
+        if specificID < 0:
+            specificID += Node.scale
+        specificIndex = int(log(specificID, 2)) + Node.shortcutNum - Node.scaleOrder
         Node.shortcuts[specificIndex] = [ID, IP, port, 0]
+        
+def askToUpdateShortcuts():
+
+    for i in range(0, Node.shortcutNum):
+        IDNeeded = 2 ** (Node.scaleOrder - 1 - i) + Node.ID
+        if IDNeeded >= Node.scale:
+            IDNeeded -= Node.scale
+        query = [9, IDNeeded, Node.IP, Node.port]
+        reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
         
 def getTargetByIDLinear(ID):
 
     if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.predecessors[-1][0]):
-        return Node.successors[-1]
+        return Node.predecessors[-1]
     if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
         return Node.successors[0]
     for i in range(Node.neighborNum - 1):
@@ -295,7 +316,7 @@ def getTargetByIDLinear(ID):
 def getTargetByID(ID):
 
     if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
-        return [False, Node.predecessors[0]]
+        return [False, [Node.ID, Node.IP, Node.port, 0]]
     if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
         return [False, Node.successors[0]]
     for i in range(Node.neighborNum - 1):
@@ -306,14 +327,14 @@ def getTargetByID(ID):
             return [False, Node.predecessors[i]]
     if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0]):
         needToSend = ID == Node.shortcuts[0][0]
-        return [needToSend, Node.shortcuts[0][0]]
+        return [needToSend, Node.shortcuts[0]]
     if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
         needToSend = ID == Node.predecessors[-1][0]
-        return [needToSend, Node.predecessors[-1][0]]
-    for i in range(Node.shortcutNum-1):
-        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i+1][0]):
-            needToSend = ID == Node.predecessors[i+1][0]
-            return [needToSend, Node.predecessors[i+1][0]]
+        return [needToSend, Node.predecessors[-1]]
+    for i in range(Node.shortcutNum - 1):
+        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
+            needToSend = ID == Node.shortcuts[i + 1][0]
+            return [needToSend, Node.shortcuts[i + 1]]
             
 def updateNeighbors(askerID, askerIP, askerPort):
     
@@ -474,7 +495,7 @@ def growNeighbors():
 
 def AIsBetweenBAndC(a, b, c):
     # At edge
-    if c < b:
+    if c <= b:
         if a <= c:
             return True
         if a > b:
@@ -641,8 +662,8 @@ def main():
         Node.scale = 2 ** Node.scaleOrder
         Node.IP = args.IP
         Node.port = args.port[0]
-        Node.shortcutNum = Node.scale - 1 - ceil(log(Node.neighborNum, 2))
-        Node.shortcuts = [None] * Node.shortcutNum
+        Node.shortcutNum = Node.scaleOrder - 1 - int(ceil(log(Node.neighborNum, 2)))
+        Node.shortcuts = [[Node.ID, Node.IP, Node.port, 0]] * Node.shortcutNum
         
         reactor.listenTCP(Node.port, ListenFactory())
         print('Ready to listen at port ' + str(Node.port))
