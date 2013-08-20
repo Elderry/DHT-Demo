@@ -19,9 +19,13 @@ First element: <type>
 51:	acknowledge to join
 	<scale>
 6:	flush predecessor(s) and successor(s)
-	<predecessor(s), successor(s)>
+	<predecessor(s)> <successor(s)>
 7:	ask node nickname
 71:	reply node nickname	
-	<nick name>
+	<nickname>
 8:	update predecessor(s) and successor(s)
-	<ID, ip, port>
+	<ID> <IP> <port>
+9:	ask who is responsible for a specific ID
+	<ID> <asker IP> <asker port>
+10: reply of the ID which is responsible for a specific ID
+	<specific ID> <ID> <IP> <port>

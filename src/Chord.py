@@ -10,6 +10,8 @@ from pickle import loads
 from random import seed
 from random import randint
 from time import sleep
+from math import log
+from math import ceil
 
 class Node:
 
@@ -17,16 +19,23 @@ class Node:
     IP = 'localhost'
     port = 8000
 
-    # Means there are about 2^scale nodes here.
-    scale = 10
+    # Means there are about <scale> nodes here.
+    scale = 0
+    # 2 ** scaleOrder = scale
+    scaleOrder = 0
 
     nickname = 'default'
 
-    # Number of successors or predecessors
+    # Number of successors or predecessors.
     neighborNum = 2
 
-    successors = [[0, 'localhost', 8000, 0], [0, 'localhost', 8000, 0]]
-    predecessors = [[0, 'localhost', 8000, 0], [0, 'localhost', 8000, 0]]
+    successors = [0, 'localhost', 8000, 0] * neighborNum
+    predecessors = [0, 'localhost', 8000, 0] * neighborNum
+    
+    knowSomeNeighbors = False
+    
+    shortcuts = None
+    shortcutNum = 0
     
     # In sesonds.
     throbInterval = 1
@@ -228,10 +237,71 @@ def react(transport, query):
     
     # Ask for flushing predessor(s) and successor(s).
     elif queryType == 81:
-        print('Ready to flush neighbor(s).')
-        Node.predecessors = query[1]
-        Node.successors = query[2]
         
+        if not Node.knowSomeNeighbors:
+            print('Ready to flush neighbor(s).')
+            Node.predecessors = query[1]
+            Node.successors = query[2]
+            askForShortcuts()
+            for i in range(0, Node.shortcutNum):
+                IDNeeded = 2 ** (Node.scaleOrder - 1 - i)
+                query = [9, IDNeeded, Node.IP, Node.port]
+                reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+                
+    # Ask who is responsible for a specific ID.
+    elif queryType == 9:
+
+        ID = query[1]
+        result = getTargetByID(ID)
+        needToSend = result[0]
+        target = result[1]
+        targetIP = target[1]
+        targetPort = target[2]
+        if needToSend:
+            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
+        else:
+            askerIP = query[2]
+            askerPort = query[3]
+            targetID = target[0]
+            query = [10, ID, targetID, targetIP, targetPort]
+            reactor.connectTCP(askerIP, askerPort, SendFactory(query))
+    
+    # Reply of the ID which is responsible for a specific ID.        
+    elif queryType == 10:
+
+        specificID = query[1]
+        ID = query[2]
+        IP = query[3]
+        port = query[3]
+        specificIndex = Node.scaleOrder - log(specificID, 2) - 1
+        Node.shortcuts[specificIndex] = [ID, IP, port, 0]
+        
+def getTargetByIDLinear(ID):
+
+    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.predecessors[-1][0]):
+        return Node.successors[-1]
+    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
+        return Node.successors[0]
+    for i in range(Node.neighborNum - 1):
+        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
+            return Node.successors[i + 1]
+    for i in range(Node.neighborNum - 1):
+        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
+            return Node.predecessors[i]
+        
+def getTargetByID(ID):
+
+    if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
+        return Node.shortcusts[-1]
+    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
+        return Node.successors[0]
+    for i in range(Node.neighborNum - 1):
+        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
+            return Node.successors[i + 1]
+    for i in range(Node.neighborNum - 1):
+        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
+            return Node.predecessors[i]
+            
 def updateNeighbors(askerID, askerIP, askerPort):
     
     # If already absorbed, return.
@@ -392,12 +462,12 @@ def growNeighbors():
 def AIsBetweenBAndC(a, b, c):
     # At edge
     if c < b:
-        if a < c:
+        if a <= c:
             return True
         if a > b:
             return True
     else:
-        if a < c and a > b:
+        if a <= c and a > b:
             return True
     return False
 
@@ -482,17 +552,7 @@ def collectNodesIDs(includeSelf=True):
 
 def sendQueryByIDLinear(ID, query):
 
-    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.predecessors[-1][0]):
-        target = Node.successors[-1]
-    elif AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
-        target = Node.successors[0]
-    else:
-        for i in range(Node.neighborNum - 1):
-            if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
-                target = Node.successors[i + 1]
-        for i in range(Node.neighborNum - 1):
-            if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
-                target = Node.predecessors[i]
+    
 
     reactor.connectTCP(target[1], target[2], SendFactory(query)) 
     
@@ -560,7 +620,7 @@ def main():
         print('Setup argument parser')
         parser = ArgumentParser()
         parser.add_argument('nickname', help='Identifier in fact')
-        parser.add_argument('-s', '--scale', nargs=1, type=int, default=10)
+        parser.add_argument('-s', '--scale', nargs=1, type=int, default=[10])
         parser.add_argument('-i', '--initial', action='store_true', default=False)
         parser.add_argument('--IP', nargs=1, default='localhost')
         parser.add_argument('-p', '--port', nargs=1, type=int, default=[8000])
@@ -570,9 +630,12 @@ def main():
         
         print('Node ' + args.nickname + ' is starting.')
         Node.nickname = args.nickname
-        Node.scale = 2 ** args.scale
+        Node.scaleOrder = args.scale[0]
+        Node.scale = 2 ** Node.scaleOrder
         Node.IP = args.IP
         Node.port = args.port[0]
+        Node.shortcutNum = Node.scale - 1 - ceil(log(Node.neighborNum, 2))
+        Node.shortcuts = [None] * Node.shortcutNum
         
         reactor.listenTCP(Node.port, ListenFactory())
         print('Ready to listen at port ' + str(Node.port))
