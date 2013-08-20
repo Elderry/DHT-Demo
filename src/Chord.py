@@ -333,25 +333,6 @@ def updateNeighbors(askerID, askerIP, askerPort):
         
         # Inform everyone the novice
         for ID in nodeIDs:
-            
-def updateNeighbors(askerID, askerIP, askerPort):
-    
-    # If already absorbed, return.
-    absorbed = checkIfAbsorbed(askerID)
-    if absorbed:
-        return
-
-    query = [8, askerID, askerIP, askerPort]
-
-    nodeIDs = collectNodesIDs()
-    fewNodes = False
-    if len(nodeIDs) < Node.neighborNum * 2 + 1:
-        fewNodes = True
-    
-    if fewNodes:
-        
-        # Inform everyone the novice
-        for ID in nodeIDs:
             if not ID == Node.ID:
                 address = getAddressByID(ID)
                 reactor.connectTCP(address[0], address[1], SendFactory(query))
