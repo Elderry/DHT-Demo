@@ -36,8 +36,10 @@ class Node:
     
     shortcuts = None
     shortcutNum = 0
+    # In seconds.
+    shortcutInterval = 5
     
-    # In sesonds.
+    # In seconds.
     throbInterval = 1
     neighborDeathInterval = 10000
     
@@ -155,7 +157,7 @@ class Throb(Thread):
                 counter = 0
                 
             shortcutCounter += 1
-            if shortcutCounter == 10:
+            if shortcutCounter == Node.shortcutInterval:
                 askToUpdateShortcuts()
                 shortcutCounter = 0
                 
@@ -327,14 +329,23 @@ def getTargetByID(ID):
             return [False, Node.predecessors[i]]
     if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0]):
         needToSend = ID == Node.shortcuts[0][0]
-        return [needToSend, Node.shortcuts[0]]
+        if needToSend:
+            return [needToSend, Node.successors[-1]]
+        else:
+            return [needToSend, Node.shortcuts[0]]
     if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
         needToSend = ID == Node.predecessors[-1][0]
-        return [needToSend, Node.predecessors[-1]]
+        if needToSend:
+            return [needToSend, Node.shortcuts[-1]]
+        else:
+            return [needToSend, Node.predecessors[-1]]
     for i in range(Node.shortcutNum - 1):
         if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
             needToSend = ID == Node.shortcuts[i + 1][0]
-            return [needToSend, Node.shortcuts[i + 1]]
+            if needToSend:
+                return [needToSend, Node.shortcuts[i]]
+            else:
+                return [needToSend, Node.shortcuts[i + 1]]
             
 def updateNeighbors(askerID, askerIP, askerPort):
     
