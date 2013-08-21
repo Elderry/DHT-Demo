@@ -63,11 +63,6 @@ class Send(protocol.Protocol):
 
         data = loads(rawData)
 
-        '''
-        queryType = data[0]
-        print('Received a query, type is ' + str(queryType) + '.')
-        '''
-
         react(self.transport, data)
         
         self.transport.loseConnection()
@@ -135,6 +130,13 @@ class Control(Thread):
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
                 query = [1, executorID, Node.IP, Node.port, queryBody]
                 reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+                
+            elif commandType == 'test':
+                testType = command[1]
+                if testType == 9:
+                    ID = int(command[2])
+                    query = [-testType, ID, Node.ID, Node.port]
+                    reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
 
         print('Control thread is ending.')
 
@@ -328,20 +330,20 @@ def getTargetByID(ID):
         if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
             return [False, Node.predecessors[i]]
     if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0]):
-        needToSend = ID == Node.shortcuts[0][0]
+        needToSend = not ID == Node.shortcuts[0][0]
         if needToSend:
             return [needToSend, Node.successors[-1]]
         else:
             return [needToSend, Node.shortcuts[0]]
     if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
-        needToSend = ID == Node.predecessors[-1][0]
+        needToSend = not ID == Node.predecessors[-1][0]
         if needToSend:
             return [needToSend, Node.shortcuts[-1]]
         else:
             return [needToSend, Node.predecessors[-1]]
     for i in range(Node.shortcutNum - 1):
         if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
-            needToSend = ID == Node.shortcuts[i + 1][0]
+            needToSend = not ID == Node.shortcuts[i + 1][0]
             if needToSend:
                 return [needToSend, Node.shortcuts[i]]
             else:

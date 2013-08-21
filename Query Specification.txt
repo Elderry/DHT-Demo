@@ -26,6 +26,8 @@ First element: <type>
 8:	update predecessor(s) and successor(s)
 	<ID> <IP> <port>
 9:	ask who is responsible for a specific ID
-	<ID> <asker IP> <asker port>
+	<specific ID> <asker IP> <asker port>
+-9: test of 9
 10: reply of the ID which is responsible for a specific ID
 	<specific ID> <ID> <IP> <port>
+-10: test of 10
