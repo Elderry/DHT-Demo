@@ -7,11 +7,10 @@ from twisted.internet import protocol, reactor
 from threading import Thread
 from pickle import dumps
 from pickle import loads
-from random import seed
-from random import randint
 from time import sleep
 from math import log
 from math import ceil
+import hashlib
 
 class Node:
 
@@ -125,8 +124,7 @@ class Control(Thread):
                 
             elif commandType == 'query':
                 queryBody = command[1]
-                seed(queryBody)
-                executorID = randint(1, Node.scale - 1)
+                executorID = long(hashlib.sha1(queryBody).hexdigest(),16) % Node.scale
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
                 query = [1, executorID, Node.IP, Node.port, queryBody]
                 reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
@@ -237,8 +235,7 @@ def react(transport, query):
     # Acknowledge of joining
     elif queryType == 51:
         Node.scale = query[1]
-        seed(Node.nickname)
-        Node.ID = randint(1, Node.scale - 1)
+        Node.ID = long(hashlib.sha1(Node.nickname).hexdigest(),16) % Node.scale
         print('Joining query has been approved.')
         print('Scale of this network: ' + str(Node.scale) + '.')
         print(Node.nickname + '\'s ID: ' + str(Node.ID) + '.')
