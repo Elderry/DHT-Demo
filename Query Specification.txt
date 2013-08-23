@@ -5,24 +5,21 @@ Each query is a list whose first element is query type
 First element: <type>
 
 1:	common query
-	<target ID, sender IP, sender port, query body>
+	<target ID> <sender IP> <sender port> <query body>
 2:	Throb
 	<ID>
 3:	ask for neighbors
 	<predecessors(True) or successors(False)> <number of neighbor needed>
-31:	reply neighbors
+300:	reply neighbors
 	<predecessors(True) or successors(False)> <number of neighbor needed> <neighbors needed>
 4:	report of common query execute condition
 	<executor ID> <Result>
 5:	ask for joining
 	<nickname>
-51:	acknowledge to join
+500:	acknowledge to join
 	<scale>
 6:	flush predecessor(s) and successor(s)
 	<predecessor(s)> <successor(s)>
-7:	ask node nickname
-71:	reply node nickname	
-	<nickname>
 8:	update predecessor(s) and successor(s)
 	<ID> <IP> <port>
 9:	ask who is responsible for a specific ID
@@ -31,3 +28,7 @@ First element: <type>
 10: reply of the ID which is responsible for a specific ID
 	<specific ID> <ID> <IP> <port>
 -10: test of 10
+11:	report of the result of execution
+	<executor ID>
+12:	ask someone which is responsible for a specific to update its shortcuts
+	<specific ID> <asker ID> <asker IP> <asker Port>

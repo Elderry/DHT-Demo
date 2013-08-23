@@ -55,7 +55,7 @@ class Send(protocol.Protocol):
         queryType = query[0]
         self.transport.write(dumps(self.factory.query))
         # Close used connection.
-        if not queryType == 3 and not queryType == 5 and not queryType == 7:
+        if not queryType == 3 and not queryType == 5:
             self.transport.loseConnection()
         
     def dataReceived(self, rawData):
@@ -79,11 +79,6 @@ class Listen(protocol.Protocol):
     def dataReceived(self, rawData):
 
         data = loads(rawData)
-        
-        '''
-        queryType = data[0]
-        print('Received a query, type is ' + str(queryType))
-        '''
         
         react(self.transport, data)
         
@@ -124,7 +119,7 @@ class Control(Thread):
                 
             elif commandType == 'query':
                 queryBody = command[1]
-                executorID = long(hashlib.sha1(queryBody).hexdigest(),16) % Node.scale
+                executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
                 query = [1, executorID, Node.IP, Node.port, queryBody]
                 reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
@@ -155,11 +150,6 @@ class Throb(Thread):
                     address = getAddressByID(neighborID)
                     reactor.connectTCP(address[0], address[1], SendFactory(query))
                 counter = 0
-                
-            shortcutCounter += 1
-            if shortcutCounter == Node.shortcutInterval:
-                askToUpdateShortcuts()
-                shortcutCounter = 0
                 
             growNeighbors()
                 
@@ -207,10 +197,10 @@ def react(transport, query):
         else:
             replyNeighbors = Node.successors[:numNeeded]
 
-        replyQuery = [31, needPredecessors, numNeeded, replyNeighbors]
+        replyQuery = [300, needPredecessors, numNeeded, replyNeighbors]
         transport.write(dumps(replyQuery))
         
-    elif queryType == 31:
+    elif queryType == 300:
         
         needPredecessors = query[1]
         numNeeded = query[2]
@@ -226,16 +216,16 @@ def react(transport, query):
     # Someone wants to join.
     elif queryType == 5:
         nickname = query[3]
-        query = [51, Node.scale]
+        query = [500, Node.scale]
         
         # Acknowledge of joining
         transport.write(dumps(query))
         print(nickname + ' is now online.')
         
     # Acknowledge of joining
-    elif queryType == 51:
+    elif queryType == 500:
         Node.scale = query[1]
-        Node.ID = long(hashlib.sha1(Node.nickname).hexdigest(),16) % Node.scale
+        Node.ID = long(hashlib.sha1(Node.nickname).hexdigest(), 16) % Node.scale
         print('Joining query has been approved.')
         print('Scale of this network: ' + str(Node.scale) + '.')
         print(Node.nickname + '\'s ID: ' + str(Node.ID) + '.')
@@ -251,7 +241,7 @@ def react(transport, query):
         updateNeighbors(query[1], query[2], query[3])
     
     # Ask for flushing predessor(s) and successor(s).
-    elif queryType == 81:
+    elif queryType == 6:
         
         if not Node.knowSomeNeighbors:
             print('Ready to flush neighbor(s).')
@@ -264,20 +254,20 @@ def react(transport, query):
     # Ask who is responsible for a specific ID.
     elif queryType == 9:
 
-        ID = query[1]
-        result = getTargetByID(ID)
-        needToSend = result[0]
+        specificID = query[1]
+        result = getTargetByID(specificID)
+        found = result[0]
         target = result[1]
         targetIP = target[1]
         targetPort = target[2]
-        if needToSend:
-            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
-        else:
+        if found:
             askerIP = query[2]
             askerPort = query[3]
             targetID = target[0]
-            query = [10, ID, targetID, targetIP, targetPort]
+            query = [10, specificID, targetID, targetIP, targetPort]
             reactor.connectTCP(askerIP, askerPort, SendFactory(query))
+        else:
+            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
     
     # Reply of the ID which is responsible for a specific ID.        
     elif queryType == 10:
@@ -286,66 +276,124 @@ def react(transport, query):
         ID = query[2]
         IP = query[3]
         port = query[4]
-        specificID -= Node.ID
-        if specificID < 0:
-            specificID += Node.scale
-        specificIndex = int(log(specificID, 2)) + Node.shortcutNum - Node.scaleOrder
-        Node.shortcuts[specificIndex] = [ID, IP, port, 0]
+        i = getIndexByShortcutID(specificID)
+        Node.shortcuts[i] = [ID, IP, port, 0]
         
+    # Ask someone which is responsible for a specific ID to update its shortcuts.
+    elif queryType == 12:
+
+        specificID = query[1]
+        result = getTargetByID(specificID, clockwise=False)
+        found = result[0]
+        target = result[1]
+        targetID = target[0]
+        if found and targetID == Node.ID:
+            power = query[2]
+            i = getIndexByPower(power)
+            askerID = query[3]
+            askerIP = query[4]
+            askerPort = query[5]
+            Node.shortcuts[i] = [askerID, askerIP, askerPort, 0]
+        else:
+            targetIP = target[1]
+            targetPort = target[2]
+            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
+        
+def getIndexByPower(power):
+    i = power + Node.shortcutNum - Node.scaleOrder
+    return i
+        
+def getIndexByShortcutID(ID):
+    ID -= Node.ID
+    if ID < 0:
+        ID += Node.scale
+    i = int(log(ID, 2)) + Node.shortcutNum - Node.scaleOrder
+    return i
+
 def askToUpdateShortcuts():
 
+    # Ask who are my shortcuts.
     for i in range(0, Node.shortcutNum):
-        IDNeeded = 2 ** (Node.scaleOrder - 1 - i) + Node.ID
+        IDNeeded = Node.ID + 2 ** (Node.scaleOrder - 1 - i)
         if IDNeeded >= Node.scale:
             IDNeeded -= Node.scale
         query = [9, IDNeeded, Node.IP, Node.port]
         reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
         
-def getTargetByIDLinear(ID):
-
-    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.predecessors[-1][0]):
-        return Node.predecessors[-1]
-    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
-        return Node.successors[0]
-    for i in range(Node.neighborNum - 1):
-        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
-            return Node.successors[i + 1]
-    for i in range(Node.neighborNum - 1):
-        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
-            return Node.predecessors[i]
+    # Tell others to update their shortcuts.
+    for i in range(0, Node.shortcutNum):
+        power = Node.scaleOrder - 1 - i
+        IDNeeded = Node.ID - 2 ** power
+        if IDNeeded < 0:
+            IDNeeded += Node.scale
+        query = [12, IDNeeded, power, Node.ID, Node.IP, Node.port]
+        reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
         
-def getTargetByID(ID):
+def getTargetByID(ID, clockwise=True):
 
-    if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
-        return [False, [Node.ID, Node.IP, Node.port, 0]]
-    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
-        return [False, Node.successors[0]]
-    for i in range(Node.neighborNum - 1):
-        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
-            return [False, Node.successors[i + 1]]
-    for i in range(Node.neighborNum - 1):
-        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
-            return [False, Node.predecessors[i]]
-    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0]):
-        needToSend = not ID == Node.shortcuts[0][0]
-        if needToSend:
-            return [needToSend, Node.successors[-1]]
+    if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID, clockwise):
+        if clockwise:
+            return [True, [Node.ID, Node.IP, Node.port, 0]]
         else:
-            return [needToSend, Node.shortcuts[0]]
-    if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0]):
-        needToSend = not ID == Node.predecessors[-1][0]
-        if needToSend:
-            return [needToSend, Node.shortcuts[-1]]
+            return [True, Node.predecessors[0]]
+    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0], clockwise):
+        if clockwise:
+            return [True, Node.successors[0]]
         else:
-            return [needToSend, Node.predecessors[-1]]
-    for i in range(Node.shortcutNum - 1):
-        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
-            needToSend = not ID == Node.shortcuts[i + 1][0]
-            if needToSend:
-                return [needToSend, Node.shortcuts[i]]
+            return [True, [Node.ID, Node.IP, Node.port, 0]]
+    for i in range(Node.neighborNum - 1):
+        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0], clockwise):
+            if clockwise:
+                return [True, Node.successors[i + 1]]
             else:
-                return [needToSend, Node.shortcuts[i + 1]]
-            
+                return [True, Node.successors[i]]
+    for i in range(Node.neighborNum - 1):
+        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0], clockwise):
+            if clockwise:
+                return [True, Node.predecessors[i]]
+            else:
+                return [True, Node.predecessors[i + 1]]
+    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0], clockwise):
+        if clockwise:
+            found = ID == Node.shortcuts[0][0]
+            if found:
+                return [found, Node.shortcuts[0]]
+            else:
+                return [found, Node.successors[-1]]
+        else:
+            found = ID == Node.successors[-1][0]
+            if found:
+                return [found, Node.successors[-1]]
+            else:
+                return [found, Node.shortcuts[0]]
+    if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0], clockwise):
+        if clockwise:
+            found = ID == Node.predecessors[-1][0]
+            if found:
+                return [found, Node.predecessors[-1]]
+            else:
+                return [found, Node.shortcuts[-1]]
+        else:
+            found = ID == Node.shortcuts[-1][0]
+            if found:
+                return [found, Node.shortcuts[-1]]
+            else:
+                return [found, Node.predecessors[-1]]
+    for i in range(Node.shortcutNum - 1):
+        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0], clockwise):
+            if clockwise:
+                found = ID == Node.shortcuts[i + 1][0]
+                if found:
+                    return [found, Node.shortcuts[i + 1]]
+                else:
+                    return [found, Node.shortcuts[i]]
+            else:
+                found = ID == Node.shortcuts[i][0]
+                if found:
+                    return [found, Node.shortcuts[i]]
+                else:
+                    return [found, Node.shortcuts[i + 1]]
+                
 def updateNeighbors(askerID, askerIP, askerPort):
     
     # If already absorbed, return.
@@ -382,7 +430,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
         neighborsIDs = fewNodesNeighbors(nodeIDs, askerID)
         predecessors = completeAddressesByIDs(neighborsIDs[0], askerID, askerIP, askerPort)
         successors = completeAddressesByIDs(neighborsIDs[1], askerID, askerIP, askerPort)
-        flushQuery = [81, predecessors, successors]
+        flushQuery = [6, predecessors, successors]
         reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
         
     else:
@@ -444,7 +492,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
                 for i in range(Node.neighborNum - 2, -1, -1):
                     predecessors[i + 1] = predecessors[i]
                 predecessors[0] = [Node.ID, Node.IP, Node.port, 0]
-            flushQuery = [81, predecessors, successors]
+            flushQuery = [6, predecessors, successors]
             reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
 
             # Update myself    
@@ -503,16 +551,21 @@ def growNeighbors():
         if not ID == Node.ID and not ID == -1:
             neighbor[3] += 1
 
-def AIsBetweenBAndC(a, b, c):
+# IF rightClose is true, means if a equals to c, return true.
+def AIsBetweenBAndC(a, b, c, rightClose=True):
     # At edge
     if c <= b:
-        if a <= c:
+        if a < c:
             return True
         if a > b:
             return True
     else:
-        if a <= c and a > b:
+        if a < c and a > b:
             return True
+    if a == c and rightClose:
+        return True
+    if a == b and not rightClose:
+        return True
     return False
 
 # When there are few nodes, calculate the neighbor(s) of center.
