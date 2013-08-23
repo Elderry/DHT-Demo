@@ -307,7 +307,8 @@ def getIndexByShortcutID(ID):
     ID -= Node.ID
     if ID < 0:
         ID += Node.scale
-    i = int(log(ID, 2)) + Node.shortcutNum - Node.scaleOrder
+    # Strange problem here, ID must be surrounded by parentheses.
+    i = int(log(int(ID), 2)) + Node.shortcutNum - Node.scaleOrder
     return i
 
 def askToUpdateShortcuts():
