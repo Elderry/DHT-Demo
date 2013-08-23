@@ -291,9 +291,11 @@ def react(transport, query):
             power = query[2]
             i = getIndexByPower(power)
             askerID = query[3]
-            askerIP = query[4]
-            askerPort = query[5]
-            Node.shortcuts[i] = [askerID, askerIP, askerPort, 0]
+            # Really need to update.
+            if AIsBetweenBAndC(specificID, Node.shortcuts[i][0], askerID, False):
+                askerIP = query[4]
+                askerPort = query[5]
+                Node.shortcuts[i] = [askerID, askerIP, askerPort, 0]
         else:
             targetIP = target[1]
             targetPort = target[2]
