@@ -1,7 +1,3 @@
-'''
-Entry point here
-'''
-
 from argparse import ArgumentParser
 from twisted.internet import protocol, reactor
 from threading import Thread
@@ -44,7 +40,7 @@ class Node:
     
     running = False
 
-class Send(protocol.Protocol):
+class Chord(protocol.Protocol):
     
     def __init__(self, SendFactory):
         self.factory = SendFactory
@@ -52,41 +48,27 @@ class Send(protocol.Protocol):
     def connectionMade(self):
 
         query = self.factory.query
-        queryType = query[0]
-        self.transport.write(dumps(self.factory.query))
-        # Close used connection.
-        if not queryType == 3 and not queryType == 5:
-            self.transport.loseConnection()
+        if not query==None:
+            queryType = query[0]
+            self.transport.write(dumps(self.factory.query))
+            # Close used connection.
+            if not queryType == 3 and not queryType == 5:
+                self.transport.loseConnection()
         
     def dataReceived(self, rawData):
 
         data = loads(rawData)
 
         react(self.transport, data)
-        
-        self.transport.loseConnection()
 
-class SendFactory(protocol.ClientFactory):
+class ChordFactory(protocol.ClientFactory):
     
-    def __init__(self, query):
+    def __init__(self, query=None):
         self.query = query
         
     def buildProtocol(self, addr):
-        return Send(self)
+        return Chord(self)
 
-class Listen(protocol.Protocol):
-    
-    def dataReceived(self, rawData):
-
-        data = loads(rawData)
-        
-        react(self.transport, data)
-        
-class ListenFactory(protocol.ServerFactory):
-    
-    def buildProtocol(self, addr):
-        return Listen()
-    
 class Control(Thread):
 
     def run(self):
@@ -122,14 +104,14 @@ class Control(Thread):
                 executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
                 query = [1, executorID, Node.IP, Node.port, queryBody, 0]
-                reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+                reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
                 
             elif commandType == 'test':
                 testType = command[1]
                 if testType == 9:
                     ID = int(command[2])
                     query = [-testType, ID, Node.ID, Node.port]
-                    reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+                    reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
 
         print('Control thread is ending.')
 
@@ -141,14 +123,14 @@ class Throb(Thread):
         while Node.running:
             sleep(1)
             
-            # Send Throb, <Node.throbInterval> seconds a time.
+            # Chord Throb, <Node.throbInterval> seconds a time.
             counter += 1
             if counter == Node.throbInterval:
                 query = [2, Node.ID]
                 neighborsIDs = collectNodesIDs(False)
                 for neighborID in neighborsIDs:
                     address = getAddressByID(neighborID)
-                    reactor.connectTCP(address[0], address[1], SendFactory(query))
+                    reactor.connectTCP(address[0], address[1], ChordFactory(query))
                 counter = 0
                 
             growNeighbors()
@@ -173,13 +155,13 @@ def react(transport, query):
             senderIP = query[2]
             senderPort = query[3]
             query = [11, Node.ID, times]
-            reactor.connectTCP(senderIP, senderPort, SendFactory(query))
+            reactor.connectTCP(senderIP, senderPort, ChordFactory(query))
         else:
             target = getTargetByID(ID)[1]
             targetIP = target[1]
             targetPort = target[2]
             query[5] = times
-            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
+            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
             
     elif queryType == 11:
         print('Query executed by ' + str(query[1]) + ' through ' + str(query[2]) + ' nodes')
@@ -267,9 +249,9 @@ def react(transport, query):
             askerPort = query[3]
             targetID = target[0]
             query = [10, specificID, targetID, targetIP, targetPort]
-            reactor.connectTCP(askerIP, askerPort, SendFactory(query))
+            reactor.connectTCP(askerIP, askerPort, ChordFactory(query))
         else:
-            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
+            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
     
     # Reply of the ID which is responsible for a specific ID.        
     elif queryType == 10:
@@ -301,7 +283,7 @@ def react(transport, query):
         else:
             targetIP = target[1]
             targetPort = target[2]
-            reactor.connectTCP(targetIP, targetPort, SendFactory(query))
+            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
         
 def getIndexByPower(power):
     i = power + Node.shortcutNum - Node.scaleOrder
@@ -323,7 +305,7 @@ def askToUpdateShortcuts():
         if IDNeeded >= Node.scale:
             IDNeeded -= Node.scale
         query = [9, IDNeeded, Node.IP, Node.port]
-        reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+        reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
         
     # Tell others to update their shortcuts.
     for i in range(0, Node.shortcutNum):
@@ -332,7 +314,7 @@ def askToUpdateShortcuts():
         if IDNeeded < 0:
             IDNeeded += Node.scale
         query = [12, IDNeeded, power, Node.ID, Node.IP, Node.port]
-        reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
+        reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
         
 def getTargetByID(ID, clockwise=True):
 
@@ -419,7 +401,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
         for ID in nodeIDs:
             if not ID == Node.ID:
                 address = getAddressByID(ID)
-                reactor.connectTCP(address[0], address[1], SendFactory(query))
+                reactor.connectTCP(address[0], address[1], ChordFactory(query))
             
         if not Node.ID in nodeIDs:
             nodeIDs.append(Node.ID)
@@ -436,7 +418,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
         predecessors = completeAddressesByIDs(neighborsIDs[0], askerID, askerIP, askerPort)
         successors = completeAddressesByIDs(neighborsIDs[1], askerID, askerIP, askerPort)
         flushQuery = [6, predecessors, successors]
-        reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
+        reactor.connectTCP(askerIP, askerPort, ChordFactory(flushQuery))
         
     else:
         found = False
@@ -459,11 +441,11 @@ def updateNeighbors(askerID, askerIP, askerPort):
                     else:
                         rightIndex = -rightIndex - 1
                         target = Node.successors[rightIndex]
-                    reactor.connectTCP(target[1], target[2], SendFactory(query))
+                    reactor.connectTCP(target[1], target[2], ChordFactory(query))
                     # The left side.
                     if leftIndex < Node.neighborNum:
                         target = Node.predecessors[leftIndex]
-                        reactor.connectTCP(target[1], target[2], SendFactory(query))
+                        reactor.connectTCP(target[1], target[2], ChordFactory(query))
 
                 # Update myself
                 for indexNeedUpdate in range(Node.neighborNum - 1, ID + 1, -1):
@@ -477,15 +459,15 @@ def updateNeighbors(askerID, askerIP, askerPort):
 
             for indexNeedUpdate in range(Node.neighborNum - 1):
                 target = Node.successors[indexNeedUpdate]
-                reactor.connectTCP(target[1], target[2], SendFactory(query))
+                reactor.connectTCP(target[1], target[2], ChordFactory(query))
                 target = Node.predecessors[indexNeedUpdate]
-                reactor.connectTCP(target[1], target[2], SendFactory(query))
+                reactor.connectTCP(target[1], target[2], ChordFactory(query))
             indexNeedUpdate = Node.neighborNum - 1
             if onLeft:
                 target = Node.successors[indexNeedUpdate]
             else:
                 target = Node.predecessors[indexNeedUpdate]
-            reactor.connectTCP(target[1], target[2], SendFactory(query))
+            reactor.connectTCP(target[1], target[2], ChordFactory(query))
             
             predecessors = list(Node.predecessors)
             successors = list(Node.successors)
@@ -498,7 +480,7 @@ def updateNeighbors(askerID, askerIP, askerPort):
                     predecessors[i + 1] = predecessors[i]
                 predecessors[0] = [Node.ID, Node.IP, Node.port, 0]
             flushQuery = [6, predecessors, successors]
-            reactor.connectTCP(askerIP, askerPort, SendFactory(flushQuery))
+            reactor.connectTCP(askerIP, askerPort, ChordFactory(flushQuery))
 
             # Update myself    
             for indexNeedUpdate in range(Node.neighborNum - 1, 0, -1):
@@ -528,11 +510,11 @@ def updateNeighbors(askerID, askerIP, askerPort):
                     else:
                         leftIndex = -leftIndex - 1
                         target = Node.predecessors[leftIndex]
-                    reactor.connectTCP(target[1], target[2], SendFactory(query))
+                    reactor.connectTCP(target[1], target[2], ChordFactory(query))
                     # The left side.
                     if rightIndex < Node.neighborNum:
                         target = Node.successors[rightIndex]
-                        reactor.connectTCP(target[1], target[2], SendFactory(query))
+                        reactor.connectTCP(target[1], target[2], ChordFactory(query))
                     
                 # Update myself
                 for indexNeedUpdate in range(Node.neighborNum - 1, ID + 1, -1):
@@ -542,9 +524,9 @@ def updateNeighbors(askerID, askerIP, askerPort):
         # If this node does not need to update itself.
         if not found:
             target = Node.predecessors[-1]
-            reactor.connectTCP(target[1], target[2], SendFactory(query))
+            reactor.connectTCP(target[1], target[2], ChordFactory(query))
             target = Node.successors[-1]
-            reactor.connectTCP(target[1], target[2], SendFactory(query))
+            reactor.connectTCP(target[1], target[2], ChordFactory(query))
         
 def growNeighbors():
     for neighbor in Node.predecessors:
@@ -679,11 +661,11 @@ def expurgateNeighbors():
     if predecessorNeeded > 0:
         query = [3, True, predecessorNeeded]
         target = Node.predecessors[lastAlivePredecessor]
-        reactor.connectTCP(target[1], target[2], SendFactory(query))
+        reactor.connectTCP(target[1], target[2], ChordFactory(query))
     if successorNeeded > 0:
         query = [3, False, successorNeeded]
         target = Node.successors[lastAliveSuccessor]
-        reactor.connectTCP(target[1], target[2], SendFactory(query))
+        reactor.connectTCP(target[1], target[2], ChordFactory(query))
 
 # Return the index of last alive neighbor.
 def permuteNeighbors(neighbors):
@@ -733,12 +715,12 @@ def main():
         Node.shortcutNum = Node.scaleOrder - 1 - int(ceil(log(Node.neighborNum, 2)))
         Node.shortcuts = [[Node.ID, Node.IP, Node.port, 0]] * Node.shortcutNum
         
-        reactor.listenTCP(Node.port, ListenFactory())
+        reactor.listenTCP(Node.port, ChordFactory())
         print('Ready to listen at port ' + str(Node.port))
         
         if not args.initial:
             query = [5, Node.IP, Node.port, Node.nickname]
-            reactor.connectTCP('localhost', 8000, SendFactory(query))
+            reactor.connectTCP('localhost', 8000, ChordFactory(query))
 
         Node.running = True
 
