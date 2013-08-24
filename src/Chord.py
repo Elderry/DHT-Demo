@@ -48,7 +48,7 @@ class Chord(protocol.Protocol):
     def connectionMade(self):
 
         query = self.factory.query
-        if not query==None:
+        if not query == None:
             queryType = query[0]
             self.transport.write(dumps(self.factory.query))
             # Close used connection.
@@ -133,10 +133,11 @@ class Throb(Thread):
                     reactor.connectTCP(address[0], address[1], ChordFactory(query))
                 counter = 0
                 
-            growNeighbors()
+            growBuddies()
                 
             # Kill idles
             expurgateNeighbors()
+            expurgateShortcuts()
 
         print('Throbbing thread is ending.')
             
@@ -260,7 +261,7 @@ def react(transport, query):
         ID = query[2]
         IP = query[3]
         port = query[4]
-        i = getIndexByShortcutID(specificID)
+        i = getIndexBySpecificID(specificID)
         Node.shortcuts[i] = [ID, IP, port, 0]
         
     # Ask someone which is responsible for a specific ID to update its shortcuts.
@@ -285,11 +286,27 @@ def react(transport, query):
             targetPort = target[2]
             reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
         
+def expurgateShortcuts():        
+    
+    for shortcut in Node.shortcuts:
+        if shortcut[3] > Node.neighborDeathInterval:
+            shortcut[0] = -1
+            i = Node.shortcuts.index(shortcut)
+            specificID = getSpecificIDByIndex(i)
+            query = [9, specificID, Node.IP, Node.port]
+            reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+            
+def getSpecificIDByIndex(i):
+    specificID = Node.ID + 2 ** (Node.scaleOrder + i - Node.shortcutNum)
+    if specificID >= Node.scale:
+        specificID -= Node.scale
+    return specificID
+
 def getIndexByPower(power):
     i = power + Node.shortcutNum - Node.scaleOrder
     return i
         
-def getIndexByShortcutID(ID):
+def getIndexBySpecificID(ID):
     ID -= Node.ID
     if ID < 0:
         ID += Node.scale
@@ -301,10 +318,8 @@ def askToUpdateShortcuts():
 
     # Ask who are my shortcuts.
     for i in range(0, Node.shortcutNum):
-        IDNeeded = Node.ID + 2 ** (Node.scaleOrder - 1 - i)
-        if IDNeeded >= Node.scale:
-            IDNeeded -= Node.scale
-        query = [9, IDNeeded, Node.IP, Node.port]
+        specificID = getSpecificIDByIndex(i)
+        query = [9, specificID, Node.IP, Node.port]
         reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
         
     # Tell others to update their shortcuts.
@@ -528,7 +543,8 @@ def updateNeighbors(askerID, askerIP, askerPort):
             target = Node.successors[-1]
             reactor.connectTCP(target[1], target[2], ChordFactory(query))
         
-def growNeighbors():
+def growBuddies():
+
     for neighbor in Node.predecessors:
         ID = neighbor[0]
         if not ID == Node.ID and not ID == -1:
@@ -537,6 +553,10 @@ def growNeighbors():
         ID = neighbor[0]
         if not ID == Node.ID and not ID == -1:
             neighbor[3] += 1
+    for shortcut in Node.shortcuts:
+        ID = shortcut[0]
+        if not ID == Node.ID and not ID == -1:
+            shortcut[3] += 1
 
 # IF rightClose is true, means if a equals to c, return true.
 def AIsBetweenBAndC(a, b, c, rightClose=True):
