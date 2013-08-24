@@ -121,7 +121,7 @@ class Control(Thread):
                 queryBody = command[1]
                 executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
-                query = [1, executorID, Node.IP, Node.port, queryBody]
+                query = [1, executorID, Node.IP, Node.port, queryBody, 0]
                 reactor.connectTCP(Node.IP, Node.port, SendFactory(query))
                 
             elif commandType == 'test':
@@ -167,20 +167,22 @@ def react(transport, query):
     # Common query.
     if queryType == 1:
         ID = query[1]
+        times = query[5] + 1
         if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
             # Execute query here.
             senderIP = query[2]
             senderPort = query[3]
-            query = [11, Node.ID]
+            query = [11, Node.ID, times]
             reactor.connectTCP(senderIP, senderPort, SendFactory(query))
         else:
             target = getTargetByID(ID)[1]
             targetIP = target[1]
             targetPort = target[2]
+            query[5] = times
             reactor.connectTCP(targetIP, targetPort, SendFactory(query))
             
     elif queryType == 11:
-        print('Query executed by ' + str(query[1]))
+        print('Query executed by ' + str(query[1]) + ' through ' + str(query[2]) + ' nodes')
         
     elif queryType == 2:
         ID = query[1]
