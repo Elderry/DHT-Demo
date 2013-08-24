@@ -333,6 +333,7 @@ def askToUpdateShortcuts():
         
 def getTargetByID(ID, clockwise=True):
 
+    # First try to find among neighbors.
     if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID, clockwise):
         if clockwise:
             return [True, [Node.ID, Node.IP, Node.port, 0]]
@@ -355,7 +356,12 @@ def getTargetByID(ID, clockwise=True):
                 return [True, Node.predecessors[i]]
             else:
                 return [True, Node.predecessors[i + 1]]
-    if AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0], clockwise):
+    
+    # Edge of neighbors and shortcuts.
+    A = AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0], clockwise)
+    B = not Node.successors[-1][0] == Node.shortcuts[0][0]
+    C = AIsBetweenBAndC(Node.successors[-1][0], Node.ID, Node.shortcuts[0][0])
+    if A and B and C:
         if clockwise:
             found = ID == Node.shortcuts[0][0]
             if found:
@@ -368,7 +374,10 @@ def getTargetByID(ID, clockwise=True):
                 return [found, Node.successors[-1]]
             else:
                 return [found, Node.shortcuts[0]]
-    if AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0], clockwise):
+    A = AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0], clockwise)
+    B = not Node.shortcuts[-1][0] == Node.predecessors[-1][0]
+    C = AIsBetweenBAndC(Node.predecessors[-1][0], Node.shortcuts[-1][0], Node.ID)
+    if A and B and C:
         if clockwise:
             found = ID == Node.predecessors[-1][0]
             if found:
@@ -381,6 +390,8 @@ def getTargetByID(ID, clockwise=True):
                 return [found, Node.shortcuts[-1]]
             else:
                 return [found, Node.predecessors[-1]]
+            
+    # At last, try to find among shortcuts.
     for i in range(Node.shortcutNum - 1):
         if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0], clockwise):
             if clockwise:
