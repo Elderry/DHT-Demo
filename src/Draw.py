@@ -4,6 +4,7 @@ Created on 2013-8-24
 @author: hp
 '''
 
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -30,10 +31,13 @@ if __name__ == '__main__':
         avg.append(av)
         num += 1
     err = np.row_stack((np.array(avg) -  np.array(minv),  np.array(maxv) -  np.array(avg)))
+    plt.figure(1)
     plt.errorbar(range(1,num +1), avg, fmt='ro', yerr=err)
     plt.xlim(0, num +1)
     plt.ylim(0, max(maxv) +1)
     plt.xlabel(r'nodes')
     plt.ylabel(r'queries')
+    plt.plot(2)
+    plt.plot(range(1,num +1),np.log2(range(1,num +1)))
     plt.show()
     data.close()

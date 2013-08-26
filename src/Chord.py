@@ -6,7 +6,7 @@ from pickle import loads
 from time import sleep
 from math import log
 from math import ceil
-import hashlib
+import hashlib,uuid
 
 class Node:
 
@@ -72,47 +72,56 @@ class ChordFactory(protocol.ClientFactory):
 class Control(Thread):
 
     def run(self):
-        while Node.running:
-            raw = raw_input('Please input your command:\n')
-            command = raw.split(' ')
-            commandType = command[0]
-            
-            if commandType == 'show':
-                variable = command[1]
-                if variable == 'nickname':
-                    print(Node.nickname)
-                elif variable == 'neighbors':
-                    print('Predecessors: ')
-                    print(str(Node.predecessors))
-                    print('Successors: ')
-                    print(str(Node.successors))
-                elif variable == 'ID':
-                    print(Node.ID)
-                elif variable == 'address':
-                    print(str([Node.IP, Node.port]))
-                elif variable == 'shortcuts':
-                    print(str(Node.shortcuts))
-                elif variable == 'shortcutNum':
-                    print(str(Node.shortcutNum))
-
-            elif commandType == 'exit':
-                reactor.stop()
-                Node.running = False
-                
-            elif commandType == 'query':
-                queryBody = command[1]
-                executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
-                print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
-                query = [1, executorID, Node.IP, Node.port, queryBody, 0]
-                reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
-                
-            elif commandType == 'test':
-                testType = command[1]
-                if testType == 9:
-                    ID = int(command[2])
-                    query = [-testType, ID, Node.ID, Node.port]
-                    reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
-
+#         while Node.running:
+#             raw = raw_input('Please input your command:\n')
+#             command = raw.split(' ')
+#             commandType = command[0]
+#             
+#             if commandType == 'show':
+#                 variable = command[1]
+#                 if variable == 'nickname':
+#                     print(Node.nickname)
+#                 elif variable == 'neighbors':
+#                     print('Predecessors: ')
+#                     print(str(Node.predecessors))
+#                     print('Successors: ')
+#                     print(str(Node.successors))
+#                 elif variable == 'ID':
+#                     print(Node.ID)
+#                 elif variable == 'address':
+#                     print(str([Node.IP, Node.port]))
+#                 elif variable == 'shortcuts':
+#                     print(str(Node.shortcuts))
+#                 elif variable == 'shortcutNum':
+#                     print(str(Node.shortcutNum))
+# 
+#             elif commandType == 'exit':
+#                 reactor.stop()
+#                 Node.running = False
+#                 
+#             elif commandType == 'query':
+#                 queryBody = command[1]
+#                 executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
+#                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
+#                 query = [1, executorID, Node.IP, Node.port, queryBody, 0]
+#                 reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+#                 
+#             elif commandType == 'test':
+#                 testType = command[1]
+#                 if testType == 9:
+#                     ID = int(command[2])
+#                     query = [-testType, ID, Node.ID, Node.port]
+#                     reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+        output = open("sample.txt","a")
+        output.write("\n")
+        output.close()
+        sleep(20)
+        for i in range(10):
+            queryBody = str(uuid.uuid1())
+            executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
+            sleep(3)
+            query = [1, executorID, Node.IP, Node.port, queryBody, 0]
+            reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
         print('Control thread is ending.')
 
 class Throb(Thread):
@@ -166,6 +175,9 @@ def react(transport, query):
             
     elif queryType == 11:
         print('Query executed by ' + str(query[1]) + ' through ' + str(query[2]) + ' nodes')
+        output = open("sample.txt","a")
+        output.write(str(query[2])+",")
+        output.close()
         
     elif queryType == 2:
         ID = query[1]
