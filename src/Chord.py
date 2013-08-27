@@ -393,6 +393,8 @@ def getTargetByID(ID, clockwise=True):
             
     # Try to find among shortcuts.
     for i in range(Node.shortcutNum - 1):
+        if Node.shortcuts[i][0] == Node.shortcuts[i + 1][0]:
+            continue
         if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0], clockwise):
             if clockwise:
                 found = ID == Node.shortcuts[i + 1][0]
