@@ -230,6 +230,8 @@ def react(transport, query):
         print('Joining query has been approved.')
         print('Scale of this network: ' + str(Node.scale) + '.')
         print(Node.nickname + '\'s ID: ' + str(Node.ID) + '.')
+        for shortcut in Node.shortcuts:
+            shortcut[0] = Node.ID
         
         # Ask for predessor(s) and successor(s).
         query = [8, Node.ID, Node.IP, Node.port]
@@ -401,13 +403,19 @@ def getTargetByID(ID, clockwise=True):
                 if found:
                     return [found, Node.shortcuts[i + 1]]
                 else:
-                    return [found, Node.shortcuts[i]]
+                    if AIsBetweenBAndC(Node.successors[-1][0], Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
+                        return [found, Node.successors[-1]]
+                    else:
+                        return [found, Node.shortcuts[i]]
             else:
                 found = ID == Node.shortcuts[i][0]
                 if found:
                     return [found, Node.shortcuts[i]]
                 else:
-                    return [found, Node.shortcuts[i + 1]]
+                    if AIsBetweenBAndC(Node.predecessors[-1][0], Node.shortcuts[i + 1][0], Node.shortcuts[i][0]):
+                        return [found, Node.predecessors[-1]]
+                    else:
+                        return [found, Node.shortcuts[i + 1]]
                 
     # Left edge of neighbors and shortcuts.
     A = AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0], clockwise)
