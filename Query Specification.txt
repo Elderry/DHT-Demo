@@ -30,5 +30,3 @@ First element: <type>
 -10: test of 10
 11:	report of the result of execution
 	<executor ID>
-12:	ask someone which is responsible for a specific to update its shortcuts
-	<specific ID> <asker ID> <asker IP> <asker Port>

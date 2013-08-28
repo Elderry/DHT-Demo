@@ -144,11 +144,15 @@ class Throb(Thread):
                     reactor.connectTCP(address[0], address[1], ChordFactory(query))
                 counter = 0
                 
+            shortcutCounter += 1
+            if shortcutCounter == 7:
+                askToUpdateShortcuts()
+                shortcutCounter = 0
+                
             growBuddies()
                 
             # Kill idles
             expurgateNeighbors()
-            expurgateShortcuts()
 
         print('Throbbing thread is ending.')
             
@@ -280,40 +284,9 @@ def react(transport, query):
         IP = query[3]
         port = query[4]
         i = getIndexBySpecificID(specificID)
-        Node.shortcuts[i] = [ID, IP, port, 0]
+        if not Node.shortcuts[i][0] == ID:
+            Node.shortcuts[i] = [ID, IP, port, 0]
         
-    # Ask someone which is responsible for a specific ID to update its shortcuts.
-    elif queryType == 12:
-
-        specificID = query[1]
-        result = getTargetByID(specificID, clockwise=False)
-        found = result[0]
-        target = result[1]
-        targetID = target[0]
-        if found and targetID == Node.ID:
-            power = query[2]
-            i = getIndexByPower(power)
-            askerID = query[3]
-            # Really need to update.
-            if AIsBetweenBAndC(specificID, Node.shortcuts[i][0], askerID, False):
-                askerIP = query[4]
-                askerPort = query[5]
-                Node.shortcuts[i] = [askerID, askerIP, askerPort, 0]
-        else:
-            targetIP = target[1]
-            targetPort = target[2]
-            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
-        
-def expurgateShortcuts():        
-    
-    for shortcut in Node.shortcuts:
-        if shortcut[3] > Node.neighborDeathInterval:
-            shortcut[0] = -1
-            i = Node.shortcuts.index(shortcut)
-            specificID = getSpecificIDByIndex(i)
-            query = [9, specificID, Node.IP, Node.port]
-            reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
-            
 def getSpecificIDByIndex(i):
     specificID = Node.ID + 2 ** (Node.scaleOrder + i - Node.shortcutNum)
     if specificID >= Node.scale:
@@ -340,100 +313,55 @@ def askToUpdateShortcuts():
         query = [9, specificID, Node.IP, Node.port]
         reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
         
-    # Tell others to update their shortcuts.
-    for i in range(0, Node.shortcutNum):
-        power = Node.scaleOrder - 1 - i
-        IDNeeded = Node.ID - 2 ** power
-        if IDNeeded < 0:
-            IDNeeded += Node.scale
-        query = [12, IDNeeded, power, Node.ID, Node.IP, Node.port]
-        reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
-        
-def getTargetByID(ID, clockwise=True):
+def getTargetByID(ID):
 
     # First try to find among neighbors.
-    if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID, clockwise):
-        if clockwise:
-            return [True, [Node.ID, Node.IP, Node.port, 0]]
-        else:
-            return [True, Node.predecessors[0]]
-    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0], clockwise):
-        if clockwise:
-            return [True, Node.successors[0]]
-        else:
-            return [True, [Node.ID, Node.IP, Node.port, 0]]
+    if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
+        return [True, [Node.ID, Node.IP, Node.port, 0]]
+    if AIsBetweenBAndC(ID, Node.ID, Node.successors[0][0]):
+        return [True, Node.successors[0]]
     for i in range(Node.neighborNum - 1):
-        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0], clockwise):
-            if clockwise:
-                return [True, Node.successors[i + 1]]
-            else:
-                return [True, Node.successors[i]]
+        if AIsBetweenBAndC(ID, Node.successors[i][0], Node.successors[i + 1][0]):
+            return [True, Node.successors[i + 1]]
     for i in range(Node.neighborNum - 1):
-        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0], clockwise):
-            if clockwise:
-                return [True, Node.predecessors[i]]
-            else:
-                return [True, Node.predecessors[i + 1]]
+        if AIsBetweenBAndC(ID, Node.predecessors[i + 1][0], Node.predecessors[i][0]):
+            return [True, Node.predecessors[i]]
     
     # Right edge of neighbors and shortcuts.
-    A = AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0], clockwise)
+    A = AIsBetweenBAndC(ID, Node.successors[-1][0], Node.shortcuts[0][0])
     B = not Node.successors[-1][0] == Node.shortcuts[0][0]
     C = AIsBetweenBAndC(Node.successors[-1][0], Node.ID, Node.shortcuts[0][0])
     if A and B and C:
-        if clockwise:
-            found = ID == Node.shortcuts[0][0]
-            if found:
-                return [found, Node.shortcuts[0]]
-            else:
-                return [found, Node.successors[-1]]
+        found = ID == Node.shortcuts[0][0]
+        if found:
+            return [found, Node.shortcuts[0]]
         else:
-            found = ID == Node.successors[-1][0]
-            if found:
-                return [found, Node.successors[-1]]
-            else:
-                return [found, Node.shortcuts[0]]
+            return [found, Node.successors[-1]]
             
     # Try to find among shortcuts.
     for i in range(Node.shortcutNum - 1):
         if Node.shortcuts[i][0] == Node.shortcuts[i + 1][0]:
             continue
-        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0], clockwise):
-            if clockwise:
-                found = ID == Node.shortcuts[i + 1][0]
-                if found:
-                    return [found, Node.shortcuts[i + 1]]
-                else:
-                    if AIsBetweenBAndC(Node.successors[-1][0], Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
-                        return [found, Node.successors[-1]]
-                    else:
-                        return [found, Node.shortcuts[i]]
+        if AIsBetweenBAndC(ID, Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
+            found = ID == Node.shortcuts[i + 1][0]
+            if found:
+                return [found, Node.shortcuts[i + 1]]
             else:
-                found = ID == Node.shortcuts[i][0]
-                if found:
-                    return [found, Node.shortcuts[i]]
+                if AIsBetweenBAndC(Node.successors[-1][0], Node.shortcuts[i][0], Node.shortcuts[i + 1][0]):
+                    return [found, Node.successors[-1]]
                 else:
-                    if AIsBetweenBAndC(Node.predecessors[-1][0], Node.shortcuts[i + 1][0], Node.shortcuts[i][0]):
-                        return [found, Node.predecessors[-1]]
-                    else:
-                        return [found, Node.shortcuts[i + 1]]
+                    return [found, Node.shortcuts[i]]
                 
     # Left edge of neighbors and shortcuts.
-    A = AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0], clockwise)
+    A = AIsBetweenBAndC(ID, Node.shortcuts[-1][0], Node.predecessors[-1][0])
     B = not Node.shortcuts[-1][0] == Node.predecessors[-1][0]
     C = AIsBetweenBAndC(Node.predecessors[-1][0], Node.shortcuts[-1][0], Node.ID)
     if A and B and C:
-        if clockwise:
-            found = ID == Node.predecessors[-1][0]
-            if found:
-                return [found, Node.predecessors[-1]]
-            else:
-                return [found, Node.shortcuts[-1]]
+        found = ID == Node.predecessors[-1][0]
+        if found:
+            return [found, Node.predecessors[-1]]
         else:
-            found = ID == Node.shortcuts[-1][0]
-            if found:
-                return [found, Node.shortcuts[-1]]
-            else:
-                return [found, Node.predecessors[-1]]
+            return [found, Node.shortcuts[-1]]
                 
 def updateNeighbors(askerID, askerIP, askerPort):
     
@@ -590,10 +518,6 @@ def growBuddies():
         ID = neighbor[0]
         if not ID == Node.ID and not ID == -1:
             neighbor[3] += 1
-    for shortcut in Node.shortcuts:
-        ID = shortcut[0]
-        if not ID == Node.ID and not ID == -1:
-            shortcut[3] += 1
 
 # IF rightClose is true, means if a equals to c, return true.
 def AIsBetweenBAndC(a, b, c, rightClose=True):
