@@ -539,19 +539,19 @@ def AIsBetweenBAndC(a, b, c, rightClose=True):
 # When there are few nodes, calculate the neighbor(s) of center.
 def fewNodesNeighbors(nodes, center):
     indexOfThisNode = nodes.index(center)
-    iterator = indexOfThisNode
     predecessors = []
     successors = []
+    nodesNum = len(nodes)
     for i in range(Node.neighborNum):
-        iterator += 1
-        if iterator >= len(nodes):
-            iterator = 0
+        iterator = indexOfThisNode + i + 1
+        while iterator >= nodesNum:
+            iterator -= nodesNum
         successors.append(nodes[iterator])
     iterator = indexOfThisNode
     for i in range(Node.neighborNum):
-        iterator -= 1
-        if iterator < 0:
-            iterator = len(nodes) - 1
+        iterator = indexOfThisNode - i - 1
+        while iterator < 0:
+            iterator += nodesNum
         predecessors.append(nodes[iterator])
     return [predecessors, successors]
         
