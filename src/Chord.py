@@ -32,7 +32,7 @@ class Node:
     shortcuts = None
     shortcutNum = 0
     # In seconds.
-    shortcutInterval = 5
+    shortcutUpdateFrequency=7
     
     # In seconds.
     throbInterval = 1
@@ -145,7 +145,7 @@ class Throb(Thread):
                 counter = 0
                 
             shortcutCounter += 1
-            if shortcutCounter == 7:
+            if shortcutCounter == Node.shortcutUpdateFrequency:
                 askToUpdateShortcuts()
                 shortcutCounter = 0
                 
@@ -679,7 +679,7 @@ def main():
         print('Setup argument parser')
         parser = ArgumentParser()
         parser.add_argument('nickname', help='Identifier in fact')
-        parser.add_argument('-s', '--scale', nargs=1, type=int, default=[10])
+        parser.add_argument('-s', '--scale', nargs=1, type=int, default=[16])
         parser.add_argument('-i', '--initial', action='store_true', default=False)
         parser.add_argument('--IP', nargs=1, default='localhost')
         parser.add_argument('-p', '--port', nargs=1, type=int, default=[8000])
