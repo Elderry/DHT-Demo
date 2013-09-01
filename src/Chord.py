@@ -6,33 +6,34 @@ from pickle import loads
 from time import sleep
 from math import log
 from math import ceil
+from math import floor
 import hashlib, uuid
 
 class Node:
 
     ID = 0
-    IP = 'localhost'
-    port = 8000
+    IP = None
+    port = None
 
     # Means there are about <scale> nodes here.
-    scale = 0
+    scale = None
     # 2 ** scaleOrder = scale
-    scaleOrder = 0
+    scaleOrder = 16
 
     nickname = 'default'
 
     # Number of successors or predecessors.
-    neighborNum = 2
+    neighborNum = None
 
-    successors = [[ID, IP, port, 0]] * neighborNum
-    predecessors = [[ID, IP, port, 0]] * neighborNum
+    successors = None
+    predecessors = None
     
     knowSomeNeighbors = False
     
     shortcuts = None
-    shortcutNum = 0
+    shortcutNum = None
     # In seconds.
-    shortcutUpdateFrequency=7
+    shortcutUpdateFrequency = 7
     
     # In seconds.
     throbInterval = 1
@@ -679,7 +680,7 @@ def main():
         print('Setup argument parser')
         parser = ArgumentParser()
         parser.add_argument('nickname', help='Identifier in fact')
-        parser.add_argument('-s', '--scale', nargs=1, type=int, default=[16])
+        parser.add_argument('-s', '--scale', nargs=1, type=int, default=[Node.scaleOrder])
         parser.add_argument('-i', '--initial', action='store_true', default=False)
         parser.add_argument('--IP', nargs=1, default='localhost')
         parser.add_argument('-p', '--port', nargs=1, type=int, default=[8000])
@@ -693,8 +694,11 @@ def main():
         Node.scale = 2 ** Node.scaleOrder
         Node.IP = args.IP
         Node.port = args.port[0]
+        Node.neighborNum = int(floor(Node.scaleOrder / 2))
         Node.shortcutNum = Node.scaleOrder - 1 - int(ceil(log(Node.neighborNum, 2)))
         Node.shortcuts = [[Node.ID, Node.IP, Node.port, 0]] * Node.shortcutNum
+        Node.successors = [[Node.ID, Node.IP, Node.port, 0]] * Node.neighborNum
+        Node.predecessors = [[Node.ID, Node.IP, Node.port, 0]] * Node.neighborNum
         
         reactor.listenTCP(Node.port, ChordFactory())
         print('Ready to listen at port ' + str(Node.port))
