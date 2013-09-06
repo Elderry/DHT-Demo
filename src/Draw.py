@@ -15,10 +15,15 @@ class Draw(protocol.Protocol):
     def dataReceived(self, rawData):
         data=loads(rawData)
         query = data[0]
-        nid = data[1]
-        nextid = data[2]
-        e = pygame.event.Event(pygame.USEREVENT,nid=int(nid), query=int(query), nextid=int(nextid))
-        pygame.event.post(e)
+        if query == 12:
+            nid = data[1]
+            e = pygame.event.Event(pygame.USEREVENT,nid=nid, query=query)
+            pygame.event.post(e)
+        elif query == 13:
+            nid = data[2]
+            nextid = data[1]
+            e = pygame.event.Event(pygame.USEREVENT,nid=nid, query=query, nextid=int(nextid))
+            pygame.event.post(e)
 
 class DrawFactory(protocol.ServerFactory):
     def buildProtocol(self, addr):
@@ -35,8 +40,12 @@ def paint():
     pygame.draw.circle(screen, (128,128,128), [320, 320], r, 1)
     myfont = pygame.font.SysFont("Comic Sans MS", 10)
     clock = pygame.time.Clock()
+    nodelist.append(0)
     for i in range(nodeNum):
-        pygame.draw.circle(screen,(0,0,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),3,0)
+        if i in nodelist:
+            pygame.draw.circle(screen,(0,255,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),5,0)
+        else:
+            pygame.draw.circle(screen,(0,0,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),3,0)
         screen.blit(myfont.render(str(i),1,(255,0,0)),(int(320 + (r-20) * math.cos(i * 2 * math.pi/nodeNum)),int(320 + (r-20) * math.sin(i * 2 * math.pi/nodeNum))))
     while True:
         clock.tick(30)
@@ -56,14 +65,14 @@ def paint():
             elif event.type==pygame.USEREVENT:
                 nid = event.nid
                 query = event.query
-                nextid = event.nextid
                 if query == 12:
                     nodelist.append(nid)
                     pygame.draw.circle(screen,(0,255,0),(int(320 + r * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))),5,0)
-                elif type == 13:
+                elif query == 13:
+                    nextid = event.nextid
                     if(nid not in nodelist):
                         pygame.draw.circle(screen,(0,0,255),(int(320 + r * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))),3,0)
-                    pygame.draw.line(screen,(0,0,255),(int(320 + r * math.cos(id * 2 * math.pi/nodeNum)),int(320 + r * math.sin(id * 2 * math.pi/nodeNum))),(int(320 + r * math.cos(nextid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nextid * 2 * math.pi/nodeNum))))
+                    pygame.draw.line(screen,(0,0,255),(int(320 + r * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))),(int(320 + r * math.cos(nextid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nextid * 2 * math.pi/nodeNum))))
                 else:
                     pass
         pygame.display.update()
