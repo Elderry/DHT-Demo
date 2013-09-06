@@ -7,6 +7,9 @@ from time import sleep
 from math import log
 from math import ceil
 from math import floor
+from sys import getsizeof
+from random import randint
+import mysql.connector
 import hashlib, uuid
 
 class Node:
@@ -40,6 +43,16 @@ class Node:
     neighborDeathInterval = 10000
     
     running = False
+    
+    user = 'admin'
+    password = '112233'
+    database = 'test'
+    
+    throughput = 0
+    
+    logFileName = None
+    
+    age = 0
 
 class Chord(protocol.Protocol):
     
@@ -130,20 +143,22 @@ class Control(Thread):
 class Throb(Thread):
     
     def run(self):
-        counter = 0
+        throbCounter = 0
         shortcutCounter = 0
         while Node.running:
+
             sleep(1)
+            Node.age += 1
             
             # Chord Throb, <Node.throbInterval> seconds a time.
-            counter += 1
-            if counter == Node.throbInterval:
+            throbCounter += 1
+            if throbCounter == Node.throbInterval:
                 query = [2, Node.ID]
                 neighborsIDs = collectNodesIDs(False)
                 for neighborID in neighborsIDs:
                     address = getAddressByID(neighborID)
                     reactor.connectTCP(address[0], address[1], ChordFactory(query))
-                counter = 0
+                throbCounter = 0
                 
             shortcutCounter += 1
             if shortcutCounter == Node.shortcutUpdateFrequency:
@@ -154,8 +169,28 @@ class Throb(Thread):
                 
             # Kill idles
             expurgateNeighbors()
+            
+            '''
+            generateLog()
+            
+            sendRandomQuery()
+            '''
 
         print('Throbbing thread is ending.')
+        
+def sendRandomQuery():
+
+    queryBody = str(randint(0, 999))
+    executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
+    print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
+    query = [1, executorID, Node.IP, Node.port, queryBody, 0]
+    reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+        
+def generateLog():
+    
+    logFile = open(Node.logFileName, 'a')
+    logFile.write(str(Node.age) + '\n' + str(Node.throughput) + '\n')
+    logFile.close()
             
 def react(transport, query):
     
@@ -168,17 +203,24 @@ def react(transport, query):
         ID = query[1]
         times = query[5] + 1
         if AIsBetweenBAndC(ID, Node.predecessors[0][0], Node.ID):
+
             # Execute query here.
+            queryBody = query[4]
+            executeQuery(queryBody)
+            
             senderIP = query[2]
             senderPort = query[3]
             query = [11, Node.ID, times]
             reactor.connectTCP(senderIP, senderPort, ChordFactory(query))
         else:
             target = getTargetByID(ID)[1]
+            targetID = target[0]
             targetIP = target[1]
             targetPort = target[2]
             query[5] = times
             reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
+            query = [13, targetID, Node.ID]
+            reactor.connectTCP('localhost', 9000, ChordFactory(query))
             
     elif queryType == 11:
         print('Query executed by ' + str(query[1]) + ' through ' + str(query[2]) + ' nodes')
@@ -242,6 +284,9 @@ def react(transport, query):
         query = [8, Node.ID, Node.IP, Node.port]
         transport.write(dumps(query))
         
+        query = [12, Node.ID]
+        react.connectTCP('localhost', 9000, ChordFactory(query))
+        
     # Ask for predessor(s) and successor(s).
     elif queryType == 8:
         print('Node with ID: ' + str(query[1]) + ' arrived.')
@@ -288,6 +333,16 @@ def react(transport, query):
         if not Node.shortcuts[i][0] == ID:
             Node.shortcuts[i] = [ID, IP, port, 0]
         
+def executeQuery(query):        
+    
+    cnx = mysql.connector.connect(user=Node.user, password=Node.password, host='localhost', database=Node.database)
+    cursor = cnx.cursor()
+    sql = 'SELECT myvalue FROM key_value WHERE mykey =' + query
+    cursor.execute(sql)
+    for myValue in cursor:
+        newFlow = getsizeof(myValue[0])
+    Node.throughput += newFlow
+
 def getSpecificIDByIndex(i):
     specificID = Node.ID + 2 ** (Node.scaleOrder + i - Node.shortcutNum)
     if specificID >= Node.scale:
@@ -690,11 +745,13 @@ def main():
         
         print('Node ' + args.nickname + ' is starting.')
         Node.nickname = args.nickname
+        Node.logFileName = Node.nickname + '.log'
         Node.scaleOrder = args.scale[0]
         Node.scale = 2 ** Node.scaleOrder
         Node.IP = args.IP
         Node.port = args.port[0]
-        Node.neighborNum = int(floor(Node.scaleOrder / 2))
+        # Node.neighborNum = int(floor(Node.scaleOrder / 2))
+        Node.neighborNum = 2
         Node.shortcutNum = Node.scaleOrder - 1 - int(ceil(log(Node.neighborNum, 2)))
         Node.shortcuts = [[Node.ID, Node.IP, Node.port, 0]] * Node.shortcutNum
         Node.successors = [[Node.ID, Node.IP, Node.port, 0]] * Node.neighborNum

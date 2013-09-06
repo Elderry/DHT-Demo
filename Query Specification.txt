@@ -30,3 +30,7 @@ First element: <type>
 -10: test of 10
 11:	report of the result of execution
 	<executor ID>
+12:	added to the system
+	<ID>
+13:	common query
+	<next hop ID> <self ID>
