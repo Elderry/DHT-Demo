@@ -30,7 +30,7 @@ class DrawFactory(protocol.ServerFactory):
         return Draw()
 
 def paint():
-    nodeNum = 2 ** 6
+    nodeNum = 2 ** 16
     nodelist = []
     r = 300
     pygame.init()
@@ -43,10 +43,8 @@ def paint():
     nodelist.append(0)
     for i in range(nodeNum):
         if i in nodelist:
-            pygame.draw.circle(screen,(0,255,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),5,0)
-        else:
-            pygame.draw.circle(screen,(0,0,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),3,0)
-        screen.blit(myfont.render(str(i),1,(255,0,0)),(int(320 + (r-20) * math.cos(i * 2 * math.pi/nodeNum)),int(320 + (r-20) * math.sin(i * 2 * math.pi/nodeNum))))
+            pygame.draw.circle(screen,(0,255,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),5,0)     
+            screen.blit(myfont.render(str(i),1,(255,0,0)),(int(320 + (r-20) * math.cos(i * 2 * math.pi/nodeNum)),int(320 + (r-20) * math.sin(i * 2 * math.pi/nodeNum))))
     while True:
         clock.tick(30)
         for event in pygame.event.get():
@@ -59,20 +57,35 @@ def paint():
                     for i in range(nodeNum):
                         if i in nodelist:
                             pygame.draw.circle(screen,(0,255,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),5,0)
-                        else:
-                            pygame.draw.circle(screen,(0,0,0),(int(320 + r * math.cos(i * 2 * math.pi/nodeNum)),int(320 + r * math.sin(i * 2 * math.pi/nodeNum))),3,0)
-                        screen.blit(myfont.render(str(i),1,(255,0,0)),(int(320 + (r-20) * math.cos(i * 2 * math.pi/nodeNum)),int(320 + (r-20) * math.sin(i * 2 * math.pi/nodeNum))))
+                            screen.blit(myfont.render(str(i),1,(255,0,0)),(int(320 + (r-20) * math.cos(i * 2 * math.pi/nodeNum)),int(320 + (r-20) * math.sin(i * 2 * math.pi/nodeNum))))
             elif event.type==pygame.USEREVENT:
                 nid = event.nid
                 query = event.query
                 if query == 12:
                     nodelist.append(nid)
                     pygame.draw.circle(screen,(0,255,0),(int(320 + r * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))),5,0)
+                    screen.blit(myfont.render(str(nid),1,(255,0,0)),(int(320 + (r-20) * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + (r-20) * math.sin(nid * 2 * math.pi/nodeNum))))
                 elif query == 13:
                     nextid = event.nextid
                     if(nid not in nodelist):
                         pygame.draw.circle(screen,(0,0,255),(int(320 + r * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))),3,0)
-                    pygame.draw.line(screen,(0,0,255),(int(320 + r * math.cos(nid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))),(int(320 + r * math.cos(nextid * 2 * math.pi/nodeNum)),int(320 + r * math.sin(nextid * 2 * math.pi/nodeNum))))
+                    x1 = int(320 + r * math.cos(nid * 2 * math.pi/nodeNum))
+                    y1 = int(320 + r * math.sin(nid * 2 * math.pi/nodeNum))
+                    x2 = int(320 + r * math.cos(nextid * 2 * math.pi/nodeNum))
+                    y2 = int(320 + r * math.sin(nextid * 2 * math.pi/nodeNum))
+                    pygame.draw.line(screen,(0,0,255),(x1,y1),(x2,y2))
+                    lx = math.cos(math.pi/6)*(x2 - x1) - (y2 - y1) /2
+                    ly = math.cos(math.pi/6)*(y2 - y1) + (x2 - x1) /2
+                    l = math.sqrt(lx * lx + ly * ly)
+                    x3 = lx/l * 10
+                    y3 = ly/l * 10
+                    pygame.draw.line(screen,(0,0,255),(x2,y2),(x2-x3,y2-y3))
+                    lx = math.cos(math.pi/6)*(x2 - x1) + (y2 - y1) /2
+                    ly = math.cos(math.pi/6)*(y2 - y1) - (x2 - x1) /2
+                    l = math.sqrt(lx * lx + ly * ly)
+                    x4 = lx/l * 10
+                    y4 = ly/l * 10
+                    pygame.draw.line(screen,(0,0,255),(x2,y2),(x2-x4,y2-y4))
                 else:
                     pass
         pygame.display.update()
