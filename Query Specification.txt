@@ -34,3 +34,7 @@ First element: <type>
 	<ID>
 13:	common query
 	<next hop ID> <self ID>
+14:	ask who is responsible for a specific ID
+	<specific ID> <asker IP> <asker port>
+15: reply of the ID which is responsible for a specific ID
+	<specific ID> <ID>

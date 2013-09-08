@@ -6,7 +6,6 @@ from pickle import loads
 from time import sleep
 from math import log
 from math import ceil
-from math import floor
 from sys import getsizeof
 from random import randint
 import mysql.connector
@@ -53,6 +52,8 @@ class Node:
     logFileName = None
     
     age = 0
+    
+    draw=False
 
 class Chord(protocol.Protocol):
     
@@ -126,15 +127,20 @@ class Control(Thread):
                     ID = int(command[2])
                     query = [-testType, ID, Node.ID, Node.port]
                     reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
-'''
+
+            elif commandType == 'find':
+                specificID = int(command[1])
+                query = [14, specificID, Node.IP, Node.port]
+                reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+                
+        '''
         output = open("sample.txt","a")
         output.write("\n")
         output.close()
-        sleep(20)
-        for i in range(10):
+        sleep(5)
+        for i in range(20):
             queryBody = str(uuid.uuid1())
             executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
-            sleep(3)
             query = [1, executorID, Node.IP, Node.port, queryBody, 0]
             reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
         print('Control thread is ending.')
@@ -206,7 +212,7 @@ def react(transport, query):
 
             # Execute query here.
             queryBody = query[4]
-            executeQuery(queryBody)
+            # executeQuery(queryBody)
             
             senderIP = query[2]
             senderPort = query[3]
@@ -219,16 +225,15 @@ def react(transport, query):
             targetPort = target[2]
             query[5] = times
             reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
-            query = [13, targetID, Node.ID]
-            reactor.connectTCP('localhost', 9000, ChordFactory(query))
+            if Node.draw:
+                query = [13, targetID, Node.ID]
+                reactor.connectTCP('localhost', 9000, ChordFactory(query))
             
     elif queryType == 11:
         print('Query executed by ' + str(query[1]) + ' through ' + str(query[2]) + ' nodes')
-        '''
-        output = open("sample.txt","a")
-        output.write(str(query[2])+",")
+        output = open("sample.txt", "a")
+        output.write(str(query[2]) + ",")
         output.close()
-        '''
         
     elif queryType == 2:
         ID = query[1]
@@ -284,8 +289,9 @@ def react(transport, query):
         query = [8, Node.ID, Node.IP, Node.port]
         transport.write(dumps(query))
         
-        query = [12, Node.ID]
-        react.connectTCP('localhost', 9000, ChordFactory(query))
+        if Node.draw:
+            query = [12, Node.ID]
+            react.connectTCP('localhost', 9000, ChordFactory(query))
         
     # Ask for predessor(s) and successor(s).
     elif queryType == 8:
@@ -332,6 +338,31 @@ def react(transport, query):
         i = getIndexBySpecificID(specificID)
         if not Node.shortcuts[i][0] == ID:
             Node.shortcuts[i] = [ID, IP, port, 0]
+            
+    elif queryType == 14:
+
+        specificID = query[1]
+        result = getTargetByID(specificID)
+        found = result[0]
+        target = result[1]
+        targetID = target[0]
+        if found:
+            askerIP = query[2]
+            askerPort = query[3]
+            query = [15, specificID, targetID]
+            reactor.connectTCP(askerIP, askerPort, ChordFactory(query))
+        else:
+            targetIP = target[1]
+            targetPort = target[2]
+            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
+            if Node.draw:
+                query = [13, targetID, Node.ID]
+                reactor.connectTCP('localhost', 9000, ChordFactory(query))
+            
+    elif queryType == 15:
+        specificID = query[1]
+        responsibleID = query[2]
+        print('Node ' + str(responsibleID) + ' is responsible for keys with ID ' + str(specificID) + '.')
         
 def executeQuery(query):        
     
