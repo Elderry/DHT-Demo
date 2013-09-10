@@ -31,7 +31,7 @@ First element: <type>
 11:	report of the result of execution
 	<executor ID>
 12:	added to the system
-	<ID>
+	<ID> <IP> <port>
 13:	common query
 	<next hop ID> <self ID>
 14:	ask who is responsible for a specific ID

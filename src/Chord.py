@@ -291,7 +291,7 @@ def react(transport, query):
         
         if Node.draw:
             query = [12, Node.ID]
-            react.connectTCP('localhost', 9000, ChordFactory(query))
+            reactor.connectTCP('localhost', 9000, ChordFactory(query))
         
     # Ask for predessor(s) and successor(s).
     elif queryType == 8:
