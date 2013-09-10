@@ -41,13 +41,13 @@ class Draw(protocol.Protocol):
             e = pygame.event.Event(pygame.USEREVENT, nid=nid, query=query, nextid=int(nextid))
             pygame.event.post(e)
 
-class DrawFactory(protocol.ServerFactory):
+class DrawFactory(protocol.ClientFactory):
 
     def __init__(self, query=None):
         self.query = query
         
     def buildProtocol(self, addr):
-        return Draw()
+        return Draw(self)
 
 def paint():
     nodeNum = 2 ** 16
@@ -86,8 +86,10 @@ def paint():
                         getInput = True
                         targetId = nodelist['nid'][i]
                         screen.fill((255, 255, 255), targetRect)
+                        screen.fill((255, 255, 255), queryRect)
                         teargetText = font.render(str(targetId), 12, (255, 0, 0))
-                        screen.blit(teargetText, targetRect)
+                        screen.blit(teargetText, targetRect)                        
+                        queryString = ''
             elif event.type == pygame.KEYDOWN:
                 if getInput:
                     if event.key == pygame.K_ESCAPE:
@@ -95,20 +97,17 @@ def paint():
                         screen.fill((255, 255, 255), queryRect)
                     elif event.key == pygame.K_KP_ENTER:
                         getInput = False
-                        screen.fill((255, 255, 255), queryRect)
                         executorID = long(hashlib.sha1(queryString).hexdigest(), 16) % nodeNum
-                        pygame.draw.circle(screen, (0, 255, 0), (int(320 + r * math.cos(executorID * 2 * math.pi / nodeNum)), int(320 + r * math.sin(executorID * 2 * math.pi / nodeNum))), 5, 0)
+                        pygame.draw.circle(screen, (0, 255, 255), (int(320 + r * math.cos(executorID * 2 * math.pi / nodeNum)), int(320 + r * math.sin(executorID * 2 * math.pi / nodeNum))), 3, 0)
                         screen.blit(myfont.render(str(executorID), 1, (255, 0, 0)), (int(320 + (r - 20) * math.cos(executorID * 2 * math.pi / nodeNum)), int(320 + (r - 20) * math.sin(executorID * 2 * math.pi / nodeNum))))
-                        i = nodelist['nid'].index(executorID)
+                        i = nodelist['nid'].index(targetId)
                         query = [1, executorID, nodelist['tip'][i], nodelist['tport'][i], queryString, 0]
-                        
-                        # add send here
-                        
-                        queryString = ''
+                        reactor.connectTCP(nodelist['tip'][i], nodelist['tport'][i], DrawFactory(queryString))
                     elif event.key == pygame.K_DELETE or event.key == pygame.K_BACKSPACE:
                         if len(queryString) > 0:
                             queryString = queryString[:-1]
                             queryText = font.render(queryString, 12, (255, 0, 0))
+                            screen.fill((255, 255, 255), queryRect)
                             screen.blit(queryText, queryRect)
                     elif event.key <= 127:
                         screen.fill((255, 255, 255), queryRect)
