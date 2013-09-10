@@ -53,7 +53,7 @@ class Node:
     
     age = 0
     
-    draw=False
+    draw = False
 
 class Chord(protocol.Protocol):
     
@@ -290,7 +290,7 @@ def react(transport, query):
         transport.write(dumps(query))
         
         if Node.draw:
-            query = [12, Node.ID]
+            query = [12, Node.ID, Node.IP, Node.port]
             reactor.connectTCP('localhost', 9000, ChordFactory(query))
         
     # Ask for predessor(s) and successor(s).
