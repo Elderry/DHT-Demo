@@ -11,11 +11,20 @@ import thread
 import hashlib
 from twisted.internet import protocol, reactor
 from pickle import loads
+from pickle import dumps
 
 class Draw(protocol.Protocol):
 
     def __init__(self, DrawFactory):
         self.factory = DrawFactory
+        
+    def connectionMade(self):
+
+        query = self.factory.query
+        if not query == None:
+            self.transport.write(dumps(self.factory.query))
+            # Close used connection.
+            self.transport.loseConnection()
 
     def dataReceived(self, rawData):
         data = loads(rawData)
@@ -33,6 +42,10 @@ class Draw(protocol.Protocol):
             pygame.event.post(e)
 
 class DrawFactory(protocol.ServerFactory):
+
+    def __init__(self, query=None):
+        self.query = query
+        
     def buildProtocol(self, addr):
         return Draw()
 
