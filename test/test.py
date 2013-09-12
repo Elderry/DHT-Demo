@@ -8,10 +8,12 @@ from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 
+'''collect statistics from sample.txt to calculate minimum, maximum and average queries responsible for per node'''
 if __name__ == '__main__':
     maxv = []
     minv = []
     avg = []
+    '''number of nodes'''
     num = 0
     data = open("sample.txt")
     for line in data:
@@ -30,6 +32,7 @@ if __name__ == '__main__':
         av = sum(tmp) / len(tmp)
         avg.append(av)
         num += 1
+    data.close()
     err = np.row_stack((np.array(avg) -  np.array(minv),  np.array(maxv) -  np.array(avg)))
     plt.figure(1)
     plt.errorbar(range(1,num +1), avg, fmt='ro', yerr=err)
@@ -40,4 +43,3 @@ if __name__ == '__main__':
     plt.plot(2)
     plt.plot(range(1,num +1),np.log2(range(1,num +1)))
     plt.show()
-    data.close()
