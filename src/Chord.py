@@ -54,6 +54,11 @@ class Node:
     age = 0
     
     draw = False
+    GUIIP = 'localhost'
+    GUIPort = 9000
+    
+    initialNodePort = 8000
+    initialNodeIP = 'localhost'
 
 class Chord(protocol.Protocol):
     
@@ -133,19 +138,6 @@ class Control(Thread):
                 query = [14, specificID, Node.IP, Node.port]
                 reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
                 
-        '''
-        output = open("sample.txt","a")
-        output.write("\n")
-        output.close()
-        sleep(5)
-        for i in range(20):
-            queryBody = str(uuid.uuid1())
-            executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
-            query = [1, executorID, Node.IP, Node.port, queryBody, 0]
-            reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
-        print('Control thread is ending.')
-        '''
-
 class Throb(Thread):
     
     def run(self):
@@ -227,7 +219,7 @@ def react(transport, query):
             reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
             if Node.draw:
                 query = [13, targetID, Node.ID]
-                reactor.connectTCP('localhost', 9000, ChordFactory(query))
+                reactor.connectTCP(Node.GUIIP, Node.GUIPort, ChordFactory(query))
             
     elif queryType == 11:
         print('Query executed by ' + str(query[1]) + ' through ' + str(query[2]) + ' nodes')
@@ -291,7 +283,7 @@ def react(transport, query):
         
         if Node.draw:
             query = [12, Node.ID, Node.IP, Node.port]
-            reactor.connectTCP('localhost', 9000, ChordFactory(query))
+            reactor.connectTCP(Node.GUIIP, Node.GUIPort, ChordFactory(query))
         
     # Ask for predessor(s) and successor(s).
     elif queryType == 8:
@@ -357,7 +349,7 @@ def react(transport, query):
             reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
             if Node.draw:
                 query = [13, targetID, Node.ID]
-                reactor.connectTCP('localhost', 9000, ChordFactory(query))
+                reactor.connectTCP(Node.GUIIP, Node.GUIPort, ChordFactory(query))
             
     elif queryType == 15:
         specificID = query[1]
@@ -375,16 +367,19 @@ def executeQuery(query):
     Node.throughput += newFlow
 
 def getSpecificIDByIndex(i):
+
     specificID = Node.ID + 2 ** (Node.scaleOrder + i - Node.shortcutNum)
     if specificID >= Node.scale:
         specificID -= Node.scale
     return specificID
 
 def getIndexByPower(power):
+
     i = power + Node.shortcutNum - Node.scaleOrder
     return i
         
 def getIndexBySpecificID(ID):
+
     ID -= Node.ID
     if ID < 0:
         ID += Node.scale
@@ -606,8 +601,9 @@ def growBuddies():
         if not ID == Node.ID and not ID == -1:
             neighbor[3] += 1
 
-# IF rightClose is true, means if a equals to c, return true.
+# If rightClose is true, means if a equals to c, return true.
 def AIsBetweenBAndC(a, b, c, rightClose=True):
+
     # At edge
     if c <= b:
         if a < c:
@@ -625,6 +621,7 @@ def AIsBetweenBAndC(a, b, c, rightClose=True):
 
 # When there are few nodes, calculate the neighbor(s) of center.
 def fewNodesNeighbors(nodes, center):
+
     indexOfThisNode = nodes.index(center)
     predecessors = []
     successors = []
@@ -643,6 +640,7 @@ def fewNodesNeighbors(nodes, center):
     return [predecessors, successors]
         
 def getAddressByID(ID):
+
     for node in Node.predecessors:
         if node[0] == ID:
             return [node[1], node[2]]
@@ -653,6 +651,7 @@ def getAddressByID(ID):
         return [Node.IP, Node.port]
     
 def getNeighborByID(ID):
+
     for node in Node.predecessors:
         if node[0] == ID:
             return node
@@ -663,6 +662,7 @@ def getNeighborByID(ID):
         return [ID, Node.IP, Node.port, 0]
 
 def completeAddressesByIDs(IDs, askerID=None, askerIP=None, askerPort=None):
+
     result = []
     for ID in IDs:
         neighbor = getNeighborByID(ID)
@@ -687,6 +687,7 @@ def checkIfAbsorbed(askerID):
 
 # Collect every node's ID.
 def collectNodesIDs(includeSelf=True):
+
     nodeIDs = []
     for predecessor in Node.predecessors:
         if not predecessor[0] in nodeIDs and not predecessor[0] == -1:
@@ -769,7 +770,9 @@ def main():
         parser.add_argument('-s', '--scale', nargs=1, type=int, default=[Node.scaleOrder])
         parser.add_argument('-i', '--initial', action='store_true', default=False)
         parser.add_argument('--IP', nargs=1, default='localhost')
-        parser.add_argument('-p', '--port', nargs=1, type=int, default=[8000])
+        parser.add_argument('-p', '--port', nargs=1, type=int, default=[Node.initialNodePort])
+        parser.add_argument('-ini', '--initialNodeIP', nargs=1, default=[Node.initialNodeIP])
+        parser.add_argument('-inp', '--initialNodePort', nargs=1, type=int, default=[Node.initialNodePort])
         
         print('Process arguments.')
         args = parser.parse_args()
@@ -787,13 +790,15 @@ def main():
         Node.shortcuts = [[Node.ID, Node.IP, Node.port, 0]] * Node.shortcutNum
         Node.successors = [[Node.ID, Node.IP, Node.port, 0]] * Node.neighborNum
         Node.predecessors = [[Node.ID, Node.IP, Node.port, 0]] * Node.neighborNum
+        Node.initialNodeIP = args.initialNodeIP[0]
+        Node.initialNodePort = args.initialNodePort[0]
         
         reactor.listenTCP(Node.port, ChordFactory())
         print('Ready to listen at port ' + str(Node.port))
         
         if not args.initial:
             query = [5, Node.IP, Node.port, Node.nickname]
-            reactor.connectTCP('localhost', 8000, ChordFactory(query))
+            reactor.connectTCP('localhost', Node.initialNodePort, ChordFactory(query))
 
         Node.running = True
 
