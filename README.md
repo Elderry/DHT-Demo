@@ -15,7 +15,7 @@ You'll need *twisted* installed as a development dependency. See [twisted websit
 
 At first, an initial node must be started by using -i or -initial argument.Then you can add other nodes.
 
-*instruction:  
+-instruction:  
 
     python chord.py -i nickname [-s scale] [-IP ip] [-p port]
     python chord.py nickname [-IP ip] [-p port]
