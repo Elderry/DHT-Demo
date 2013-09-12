@@ -9,7 +9,7 @@ from math import ceil
 from sys import getsizeof
 from random import randint
 import mysql.connector
-import hashlib, uuid
+import hashlib
 
 class Node:
 
