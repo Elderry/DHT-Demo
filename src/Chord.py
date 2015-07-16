@@ -53,12 +53,12 @@ class Node:
     
     age = 0
     
-    draw = False
+    draw = True
     GUIIP = 'localhost'
     GUIPort = 9000
     
-    initialNodePort = 8000
-    initialNodeIP = 'localhost'
+    initialNodePort = 8470
+    initialNodeIP = '127.0.0.1'
 
 class Chord(protocol.Protocol):
     
@@ -124,19 +124,19 @@ class Control(Thread):
                 executorID = long(hashlib.sha1(queryBody).hexdigest(), 16) % Node.scale
                 print('Node ' + str(executorID) + ' is responsible for query: ' + str(queryBody))
                 query = [1, executorID, Node.IP, Node.port, queryBody, 0]
-                reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+                reactor.connectTCP(Node.IP[0], Node.port, ChordFactory(query))
                  
             elif commandType == 'test':
                 testType = command[1]
                 if testType == 9:
                     ID = int(command[2])
                     query = [-testType, ID, Node.ID, Node.port]
-                    reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+                    reactor.connectTCP(Node.IP[0], Node.port, ChordFactory(query))
 
             elif commandType == 'find':
                 specificID = int(command[1])
                 query = [14, specificID, Node.IP, Node.port]
-                reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+                reactor.connectTCP(Node.IP[0], Node.port, ChordFactory(query))
                 
 class Throb(Thread):
     
@@ -155,7 +155,7 @@ class Throb(Thread):
                 neighborsIDs = collectNodesIDs(False)
                 for neighborID in neighborsIDs:
                     address = getAddressByID(neighborID)
-                    reactor.connectTCP(address[0], address[1], ChordFactory(query))
+                    reactor.connectTCP(address[0][0], address[1], ChordFactory(query))
                 throbCounter = 0
                 
             shortcutCounter += 1
@@ -209,14 +209,14 @@ def react(transport, query):
             senderIP = query[2]
             senderPort = query[3]
             query = [11, Node.ID, times]
-            reactor.connectTCP(senderIP, senderPort, ChordFactory(query))
+            reactor.connectTCP(senderIP[0], senderPort, ChordFactory(query))
         else:
             target = getTargetByID(ID)[1]
             targetID = target[0]
             targetIP = target[1]
             targetPort = target[2]
             query[5] = times
-            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
+            reactor.connectTCP(targetIP[0], targetPort, ChordFactory(query))
             if Node.draw:
                 query = [13, targetID, Node.ID]
                 reactor.connectTCP(Node.GUIIP, Node.GUIPort, ChordFactory(query))
@@ -289,7 +289,7 @@ def react(transport, query):
     elif queryType == 8:
         print('Node with ID: ' + str(query[1]) + ' arrived.')
         print('Going to update neighbor(s).')
-        updateNeighbors(query[1], query[2], query[3])
+        updateNeighbors(query[1], query[2][0], query[3])
     
     # Ask for flushing predessor(s) and successor(s).
     elif queryType == 6:
@@ -316,9 +316,9 @@ def react(transport, query):
             askerPort = query[3]
             targetID = target[0]
             query = [10, specificID, targetID, targetIP, targetPort]
-            reactor.connectTCP(askerIP, askerPort, ChordFactory(query))
+            reactor.connectTCP(askerIP[0], askerPort, ChordFactory(query))
         else:
-            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
+            reactor.connectTCP(targetIP[0], targetPort, ChordFactory(query))
     
     # Reply of the ID which is responsible for a specific ID.        
     elif queryType == 10:
@@ -342,11 +342,11 @@ def react(transport, query):
             askerIP = query[2]
             askerPort = query[3]
             query = [15, specificID, targetID]
-            reactor.connectTCP(askerIP, askerPort, ChordFactory(query))
+            reactor.connectTCP(askerIP[0], askerPort, ChordFactory(query))
         else:
             targetIP = target[1]
             targetPort = target[2]
-            reactor.connectTCP(targetIP, targetPort, ChordFactory(query))
+            reactor.connectTCP(targetIP[0], targetPort, ChordFactory(query))
             if Node.draw:
                 query = [13, targetID, Node.ID]
                 reactor.connectTCP(Node.GUIIP, Node.GUIPort, ChordFactory(query))
@@ -384,8 +384,10 @@ def getIndexBySpecificID(ID):
     if ID < 0:
         ID += Node.scale
     # Strange problem here, ID must be surrounded by parentheses.
-    i = int(log(int(ID), 2)) + Node.shortcutNum - Node.scaleOrder
-    return i
+    if int(ID) == 0:
+        return Node.shortcutNum - Node.scaleOrder
+    else:
+        return int(log(int(ID), 2)) + Node.shortcutNum - Node.scaleOrder
 
 def askToUpdateShortcuts():
 
@@ -393,7 +395,7 @@ def askToUpdateShortcuts():
     for i in range(0, Node.shortcutNum):
         specificID = getSpecificIDByIndex(i)
         query = [9, specificID, Node.IP, Node.port]
-        reactor.connectTCP(Node.IP, Node.port, ChordFactory(query))
+        reactor.connectTCP(Node.IP[0], Node.port, ChordFactory(query))
         
 def getTargetByID(ID):
 
@@ -801,11 +803,8 @@ def main():
             reactor.connectTCP('localhost', Node.initialNodePort, ChordFactory(query))
 
         Node.running = True
-
         Control().start()
-        
         Throb().start()
-
         reactor.run()
         
         print('Main thread is ending.')

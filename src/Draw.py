@@ -51,7 +51,7 @@ class DrawFactory(protocol.ClientFactory):
 
 def paint():
     nodeNum = 2 ** 16
-    nodelist = {'nid':[], 'tip':[], 'tport':[]}
+    nodelist = {'nid':[], 'nip':[], 'nport':[]}
     rectlist = []
     getInput = False
     targetId = 0;
@@ -66,8 +66,8 @@ def paint():
     font = pygame.font.SysFont(None, 30)
     clock = pygame.time.Clock()
     nodelist['nid'].append(0)
-    nodelist['tip'].append('localhost')
-    nodelist['tport'].append(8000)
+    nodelist['nip'].append('127.0.0.1')
+    nodelist['nport'].append(8470)
     rectlist.append(rect)
     for i in range(nodeNum):
         if i in nodelist['nid']:
@@ -101,8 +101,8 @@ def paint():
                         pygame.draw.circle(screen, (0, 255, 255), (int(320 + r * math.cos(executorID * 2 * math.pi / nodeNum)), int(320 + r * math.sin(executorID * 2 * math.pi / nodeNum))), 3, 0)
                         screen.blit(myfont.render(str(executorID), 1, (255, 0, 0)), (int(320 + (r - 20) * math.cos(executorID * 2 * math.pi / nodeNum)), int(320 + (r - 20) * math.sin(executorID * 2 * math.pi / nodeNum))))
                         i = nodelist['nid'].index(targetId)
-                        query = [1, executorID, nodelist['tip'][i], nodelist['tport'][i], queryString, 0]
-                        reactor.connectTCP(nodelist['tip'][i], nodelist['tport'][i], DrawFactory(queryString))
+                        query = [1, executorID, nodelist['nip'][i], nodelist['nport'][i], queryString, 0]
+                        reactor.connectTCP(nodelist['nip'][i], nodelist['nport'][i], DrawFactory(queryString))
                     elif event.key == pygame.K_DELETE or event.key == pygame.K_BACKSPACE:
                         if len(queryString) > 0:
                             queryString = queryString[:-1]
