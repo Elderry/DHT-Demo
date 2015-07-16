@@ -28,6 +28,13 @@ If you want to send a query through a node, just click the node and then input y
 
 If there're too many lines on screen, you can enter space to redraw.
 
+##Test Example
+
+Using 3 console windows, run in each one:
+	python Draw.py
+	python Chord.py -i nodeA -s 10 --IP 127.0.0.1 -p 8470
+	python Chord.py nodeB --IP 127.0.0.1 -p 8471
+
 ##Feedback
 
 Any questions, feel free to contact us.
