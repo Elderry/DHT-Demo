@@ -1,35 +1,35 @@
-dht-demo
-========
+#DHT-Demo
 
-A demo program for Distributed Hash Table
+A demo program for Distributed Hash Table, implemented Chord protocol in Python.
 
-##About
+##Environment
 
-It's a basic simulated implementation of the Chord protocol in Python.
+You'll need *twisted* installed as a development dependency. See [twisted website](http://twistedmatrix.com/trac/) for help.
 
-##Usage
+##Running
 
-You'll need *twisted* installed as a development dependency. See [twisted website](http://twistedmatrix.com/trac/) for help with that.
+At first, an initial node must be started by using -i or -initial argument. Then you can add other nodes.
 
-###Running a node
+###instruction:
 
-At first, an initial node must be started by using -i or -initial argument.Then you can add other nodes.
+    python chord.py -i <nickname> [-s scale] [-IP ip] [-p port]
+    python chord.py <nickname> [-IP ip] [-p port]
 
-**instruction:**  
+###notice:
 
-    python chord.py -i nickname [-s scale] [-IP ip] [-p port]
-    python chord.py nickname [-IP ip] [-p port]
+1. Nicknames must be unique.
+2. The initial node's address must be 'localhost', 8000.
 
-###GUI
+##GUI
 
-There's a GUI for a more convenient way to send and demonstrate query. You can run draw.py to start the GUI before node's start and it will listen to the port 9000.
+There's a GUI for a more convenient way to send and demonstrate query. You can run draw.py to start the GUI before node's start and it will listen to port 9000.
 
 If you want to send a query through a node, just click the node and then input your query string. When finished, target node and a path the query went through these nodes will be displayed.
 
-If there's too many lines on the screen, you can enter space key to redraw the screen.
+If there're too many lines on screen, you can enter space to redraw.
 
 ##Feedback
 
-If there's some questions, feel free to contact us.
+Any questions, feel free to contact us.
 
 * email: `elderry@outlook.com` `zy3861@163.com`
