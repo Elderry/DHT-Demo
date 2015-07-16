@@ -18,7 +18,7 @@ At first, an initial node must be started by using -i or -initial argument. Then
 ###notice:
 
 1. Nicknames must be unique.
-2. The initial node's address must be 'localhost', 8000.
+2. The initial node's address must be 'localhost', 8470.
 
 ##GUI
 
@@ -31,9 +31,10 @@ If there're too many lines on screen, you can enter space to redraw.
 ##Test Example
 
 Using 3 console windows, run in each one:
-	python Draw.py
-	python Chord.py -i nodeA -s 10 --IP 127.0.0.1 -p 8470
-	python Chord.py nodeB --IP 127.0.0.1 -p 8471
+
+    python Draw.py
+    python Chord.py -i nodeA -s 10 --IP 127.0.0.1 -p 8470
+    python Chord.py nodeB --IP 127.0.0.1 -p 8471
 
 ##Feedback
 
